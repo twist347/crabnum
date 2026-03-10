@@ -14,8 +14,6 @@
 #include <cstddef>
 #include <string>
 #include <array>
-#include <sstream>
-#include <iomanip>
 #include <charconv>
 #include <stdfloat>
 #include <numbers>
@@ -40,7 +38,7 @@ namespace cn {
         constexpr Num(T v) : m_v{v} {
         }
 
-        constexpr T value() const noexcept { return m_v; }
+        [[nodiscard]] constexpr auto value() const noexcept -> T { return m_v; }
 
         explicit constexpr operator T() const noexcept { return m_v; }
 
@@ -57,24 +55,70 @@ namespace cn {
             return Out{static_cast<Out::value_type>(m_v)};
         }
 
-        // TODO: add try_as
-
-        template<Number U>
-        constexpr auto as_raw() const noexcept -> U {
-            return static_cast<U>(m_v);
+        constexpr auto write_to(char *buf, std::size_t len) const -> std::expected<char *, std::errc> {
+            if constexpr (Integral<T>) {
+                auto [ptr, ec] = std::to_chars(buf, buf + len, m_v);
+                if (ec != std::errc{}) {
+                    return std::unexpected{ec};
+                }
+                return ptr;
+            } else {
+                using Raw = std::conditional_t<sizeof(T) <= 4, float, double>;
+                auto [ptr, ec] = std::to_chars(
+                    buf, buf + len,
+                    static_cast<Raw>(m_v),
+                    std::chars_format::general,
+                    std::numeric_limits<T>::max_digits10
+                );
+                if (ec != std::errc{}) {
+                    return std::unexpected{ec};
+                }
+                return ptr;
+            }
         }
 
-        auto to_string() const -> std::string {
-            if constexpr (Integral<T>) {
-                std::array<char, 64> buf{};
-                auto [ptr, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), m_v);
-                return std::string(buf.data(), ptr);
-            } else {
-                // Floating<T>
-                std::ostringstream oss;
-                oss << std::setprecision(std::numeric_limits<T>::max_digits10) << m_v;
-                return oss.str();
+        static constexpr auto parse(std::string_view sv) -> std::expected<std::pair<Num, const char *>, std::errc> {
+            if (sv.empty()) {
+                return std::unexpected{std::errc::invalid_argument};
             }
+
+            T val{};
+            if constexpr (Integral<T>) {
+                auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
+                if (ec != std::errc{}) {
+                    return std::unexpected{ec};
+                }
+                return std::pair{Num{val}, ptr};
+            } else {
+                using Raw = std::conditional_t<sizeof(T) <= 4, float, double>;
+                Raw raw{};
+                auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), raw);
+                if (ec != std::errc{}) {
+                    return std::unexpected{ec};
+                }
+                return std::pair{Num{static_cast<T>(raw)}, ptr};
+            }
+        }
+
+        [[nodiscard]] constexpr auto to_string() const -> std::string {
+            std::array<char, 64> buf{};
+            const auto res = write_to(buf.data(), buf.size());
+            if (!res) {
+                return std::string{};
+            }
+            return std::string(buf.data(), *res);
+        }
+
+        static constexpr auto from_string(std::string_view sv) -> std::expected<Num, std::errc> {
+            auto res = parse(sv);
+            if (!res) {
+                return std::unexpected{res.error()};
+            }
+            auto [num, ptr] = *res;
+            if (ptr != sv.data() + sv.size()) {
+                return std::unexpected{std::errc::invalid_argument};
+            }
+            return num;
         }
 
         /* ---------- LIMITS ---------- */
@@ -84,7 +128,7 @@ namespace cn {
 
         /* ---------- COMMON MATH ---------- */
 
-        constexpr auto abs() const noexcept -> Num {
+        [[nodiscard]] constexpr auto abs() const noexcept -> Num {
             if constexpr (std::unsigned_integral<T>) {
                 return *this;
             } else if constexpr (Floating<T>) {
@@ -95,114 +139,114 @@ namespace cn {
             }
         }
 
-        constexpr auto min(Num other) const noexcept -> Num { return m_v < other.m_v ? *this : other; }
-        constexpr auto max(Num other) const noexcept -> Num { return m_v < other.m_v ? other : *this; }
+        [[nodiscard]] constexpr auto min(Num other) const noexcept -> Num { return m_v < other.m_v ? *this : other; }
+        [[nodiscard]] constexpr auto max(Num other) const noexcept -> Num { return m_v < other.m_v ? other : *this; }
 
-        constexpr auto clamp(Num lo, Num hi) const noexcept -> Num {
+        [[nodiscard]] constexpr auto clamp(Num lo, Num hi) const noexcept -> Num {
             return this->max(lo).min(hi);
         }
 
-        constexpr auto sqrt() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto sqrt() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::sqrt(m_v))};
         }
 
-        constexpr auto cbrt() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto cbrt() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::cbrt(m_v))};
         }
 
-        constexpr auto exp() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto exp() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::exp(m_v))};
         }
 
-        constexpr auto log() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto log() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::log(m_v))};
         }
 
-        constexpr auto log10() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto log10() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::log10(m_v))};
         }
 
-        constexpr auto pow(T e) const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto pow(T e) const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::pow(m_v, e))};
         }
 
         template<Floating U>
-        constexpr auto pow(Num<U> e) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
+        [[nodiscard]] constexpr auto pow(Num<U> e) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
             using R = std::common_type_t<T, U>;
             return Num<R>{static_cast<R>(std::pow(this->as<R>(), e.template as<R>()))};
         }
 
         // trig funcs
 
-        constexpr auto sin() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto sin() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::sin(m_v))};
         }
 
-        constexpr auto cos() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto cos() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::cos(m_v))};
         }
 
-        constexpr auto tan() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto tan() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::tan(m_v))};
         }
 
-        constexpr auto asin() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto asin() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::asin(m_v))};
         }
 
-        constexpr auto acos() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto acos() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::acos(m_v))};
         }
 
-        constexpr auto atan() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto atan() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::atan(m_v))};
         }
 
         template<Floating U>
-        constexpr auto atan2(Num<U> x) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
+        [[nodiscard]] constexpr auto atan2(Num<U> x) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
             using R = std::common_type_t<T, U>;
             return Num<R>{static_cast<R>(std::atan2(this->as<R>(), x.template as<R>()))}; // y.atan2(x)
         }
 
         template<Floating U>
-        constexpr auto hypot(Num<U> x) const -> Num<std::common_type_t<T, U> > requires Floating<U> {
+        [[nodiscard]] constexpr auto hypot(Num<U> x) const -> Num<std::common_type_t<T, U> > requires Floating<U> {
             using R = std::common_type_t<T, U>;
             return Num<R>{static_cast<R>(std::hypot(this->as<R>(), x.template as<R>()))};
         }
 
         // rounding
 
-        constexpr auto floor() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto floor() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::floor(m_v))};
         }
 
-        constexpr auto ceil() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto ceil() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::ceil(m_v))};
         }
 
-        constexpr auto round() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto round() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::round(m_v))};
         }
 
-        constexpr auto trunc() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto trunc() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::trunc(m_v))};
         }
 
-        constexpr auto fract() const -> Num requires Floating<T> {
+        [[nodiscard]] constexpr auto fract() const -> Num requires Floating<T> {
             return Num{static_cast<T>(m_v - std::trunc(m_v))};
         }
 
         // predicates
 
-        constexpr auto is_nan() const noexcept -> bool requires Floating<T> {
+        [[nodiscard]] constexpr auto is_nan() const noexcept -> bool requires Floating<T> {
             return std::isnan(m_v);
         }
 
-        constexpr auto is_finite() const noexcept -> bool requires Floating<T> {
+        [[nodiscard]] constexpr auto is_finite() const noexcept -> bool requires Floating<T> {
             return std::isfinite(m_v);
         }
 
-        constexpr auto is_inf() const noexcept -> bool requires Floating<T> {
+        [[nodiscard]] constexpr auto is_inf() const noexcept -> bool requires Floating<T> {
             return std::isinf(m_v);
         }
 
@@ -385,32 +429,44 @@ namespace cn {
     template<Integral T>
     constexpr auto operator%(T lhs, Num<T> rhs) noexcept -> Num<T> { return Num<T>{lhs} % rhs; }
 
-
-    template<Number T>
-    inline auto operator<<(std::ostream &os, const Num<T> &x) -> std::ostream & {
-        return os << x.to_string();
-    }
-
     /* ---------- STREAMS ---------- */
 
     template<Number T>
-    inline auto operator>>(std::istream &is, Num<T> &x) -> std::istream & {
-        if constexpr (std::same_as<T, std::int8_t> || std::same_as<T, std::uint8_t>) {
-            int tmp{};
-            if (is >> tmp) {
-                if (tmp < static_cast<int>(std::numeric_limits<T>::min()) ||
-                    tmp > static_cast<int>(std::numeric_limits<T>::max())) {
-                    is.setstate(std::ios::failbit);
-                } else {
-                    x = Num<T>{static_cast<T>(tmp)};
-                }
-            }
-            return is;
+    inline auto operator<<(std::ostream &os, const Num<T> &x) -> std::ostream & {
+        std::array<char, 64> buf{};
+        if (auto res = x.write_to(buf.data(), buf.size())) {
+            os.write(buf.data(), res.value() - buf.data());
         } else {
-            T tmp{};
-            if (is >> tmp) x = Num<T>{tmp};
+            os.setstate(std::ios::failbit);
+        }
+        return os;
+    }
+
+    template<Number T>
+    inline auto operator>>(std::istream &is, Num<T> &x) -> std::istream & {
+        std::array<char, 64> buf{};
+        is >> std::ws;
+
+        std::size_t len = 0;
+        while (len < buf.size() - 1) {
+            if (const auto ch = is.peek(); ch == std::istream::traits_type::eof() || std::isspace(ch)) {
+                break;
+            }
+            buf[len++] = static_cast<char>(is.get());
+        }
+
+        auto res = Num<T>::parse(std::string_view{buf.data(), len});
+        if (!res) {
+            is.setstate(std::ios::failbit);
             return is;
         }
+        auto [num, ptr] = *res;
+        if (ptr != buf.data() + len) {
+            is.setstate(std::ios::failbit);
+            return is;
+        }
+        x = num;
+        return is;
     }
 
     template<typename T, Number U>
@@ -437,70 +493,89 @@ namespace cn {
     using f64 = Num<std::float64_t>;
 }
 
+/* ---------- std::hash ---------- */
+
+template<cn::Number T>
+struct std::hash<cn::Num<T> > {
+    constexpr std::size_t operator()(cn::Num<T> n) const noexcept {
+        return std::hash<T>{}(n.value());
+    }
+};
+
+/* ---------- std::formatter ---------- */
+
+template<cn::Number T>
+struct std::formatter<cn::Num<T> > : std::formatter<T> {
+    auto format(cn::Num<T> n, auto &ctx) const {
+        return std::formatter<T>::format(n.value(), ctx);
+    }
+};
+
 /* ---------- LITERALS ---------- */
 
 namespace cn::literals {
-    constexpr i8 operator"" _i8(unsigned long long v) noexcept { return i8{static_cast<std::int8_t>(v)}; }
-    constexpr i16 operator"" _i16(unsigned long long v) noexcept { return i16{static_cast<std::int16_t>(v)}; }
-    constexpr i32 operator"" _i32(unsigned long long v) noexcept { return i32{static_cast<std::int32_t>(v)}; }
-    constexpr i64 operator"" _i64(unsigned long long v) noexcept { return i64{static_cast<std::int64_t>(v)}; }
+    constexpr i8 operator""_i8(unsigned long long v) noexcept { return i8{static_cast<std::int8_t>(v)}; }
+    constexpr i16 operator""_i16(unsigned long long v) noexcept { return i16{static_cast<std::int16_t>(v)}; }
+    constexpr i32 operator""_i32(unsigned long long v) noexcept { return i32{static_cast<std::int32_t>(v)}; }
+    constexpr i64 operator""_i64(unsigned long long v) noexcept { return i64{static_cast<std::int64_t>(v)}; }
 
-    constexpr u8 operator"" _u8(unsigned long long v) noexcept { return u8{static_cast<std::uint8_t>(v)}; }
-    constexpr u16 operator"" _u16(unsigned long long v) noexcept { return u16{static_cast<std::uint16_t>(v)}; }
-    constexpr u32 operator"" _u32(unsigned long long v) noexcept { return u32{static_cast<std::uint32_t>(v)}; }
-    constexpr u64 operator"" _u64(unsigned long long v) noexcept { return u64{static_cast<std::uint64_t>(v)}; }
+    constexpr u8 operator""_u8(unsigned long long v) noexcept { return u8{static_cast<std::uint8_t>(v)}; }
+    constexpr u16 operator""_u16(unsigned long long v) noexcept { return u16{static_cast<std::uint16_t>(v)}; }
+    constexpr u32 operator""_u32(unsigned long long v) noexcept { return u32{static_cast<std::uint32_t>(v)}; }
+    constexpr u64 operator""_u64(unsigned long long v) noexcept { return u64{static_cast<std::uint64_t>(v)}; }
 
-    constexpr isize operator"" _isize(unsigned long long v) noexcept { return isize{static_cast<std::ptrdiff_t>(v)}; }
-    constexpr usize operator"" _usize(unsigned long long v) noexcept { return usize{static_cast<std::size_t>(v)}; }
+    constexpr isize operator""_isize(unsigned long long v) noexcept { return isize{static_cast<std::ptrdiff_t>(v)}; }
+    constexpr usize operator""_usize(unsigned long long v) noexcept { return usize{static_cast<std::size_t>(v)}; }
 
-    constexpr f32 operator"" _f32(long double v) noexcept { return f32{static_cast<std::float32_t>(v)}; }
-    constexpr f64 operator"" _f64(long double v) noexcept { return f64{static_cast<std::float64_t>(v)}; }
+    constexpr f32 operator""_f32(long double v) noexcept { return f32{static_cast<std::float32_t>(v)}; }
+    constexpr f64 operator""_f64(long double v) noexcept { return f64{static_cast<std::float64_t>(v)}; }
 
-    constexpr f32 operator"" _f32(unsigned long long v) noexcept { return f32{static_cast<std::float32_t>(v)}; }
-    constexpr f64 operator"" _f64(unsigned long long v) noexcept { return f64{static_cast<std::float64_t>(v)}; }
+    constexpr f32 operator""_f32(unsigned long long v) noexcept { return f32{static_cast<std::float32_t>(v)}; }
+    constexpr f64 operator""_f64(unsigned long long v) noexcept { return f64{static_cast<std::float64_t>(v)}; }
 }
 
 /* ---------- CONSTS ---------- */
 
 namespace cn::consts {
-    // TODO: tau
+    template<typename T>
+    inline constexpr Num<T> e{std::numbers::e_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> e{std::numbers::e_v<T>};
+    inline constexpr Num<T> log2e{std::numbers::log2e_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> log2e{std::numbers::log2e_v<T>};
+    inline constexpr Num<T> log10e{std::numbers::log10e_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> log10e{std::numbers::log10e_v<T>};
+    inline constexpr Num<T> pi{std::numbers::pi_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> pi{std::numbers::pi_v<T>};
+    inline constexpr Num<T> inv_pi{std::numbers::inv_pi_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> inv_pi{std::numbers::inv_pi_v<T>};
+    inline constexpr Num<T> inv_sqrtpi{std::numbers::inv_sqrtpi_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> inv_sqrtpi{std::numbers::inv_sqrtpi_v<T>};
+    inline constexpr Num<T> ln2{std::numbers::ln2_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> ln2{std::numbers::ln2_v<T>};
+    inline constexpr Num<T> ln10{std::numbers::ln10_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> ln10{std::numbers::ln10_v<T>};
+    inline constexpr Num<T> sqrt2{std::numbers::sqrt2_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> sqrt2{std::numbers::sqrt2_v<T>};
+    inline constexpr Num<T> sqrt3{std::numbers::sqrt3_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> sqrt3{std::numbers::sqrt3_v<T>};
+    inline constexpr Num<T> inv_sqrt3{std::numbers::inv_sqrt3_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> inv_sqrt3{std::numbers::inv_sqrt3_v<T>};
+    inline constexpr Num<T> egamma{std::numbers::egamma_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> egamma{std::numbers::egamma_v<T>};
+    inline constexpr Num<T> phi{std::numbers::phi_v<T>};
 
     template<typename T>
-    inline constexpr std::remove_cvref_t<T> phi{std::numbers::phi_v<T>};
+    inline constexpr Num<T> tau{std::numbers::pi_v<T> * T{2}};
 }

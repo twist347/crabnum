@@ -5,26 +5,50 @@ on:
   pull_request:
 
 jobs:
-  build:
+  build-gcc:
     runs-on: ubuntu-24.04
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake pkg-config g++-14 gcc-14
+      - uses: cachix/install-nix-action@v27
+
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-gcc-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-gcc-${{ runner.os }}-
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=g++-14 -DCMAKE_C_COMPILER=gcc-14
+        run: nix develop --command cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 
       - name: Build
-        run: cmake --build build --parallel
+        run: nix develop --command cmake --build build --parallel
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --no-tests=error
+        run: nix develop --command ctest --test-dir build --output-on-failure --no-tests=error
+
+# clang does not support std::float<>_t for now (clang-22.1)
+
+#  build-clang:
+#    runs-on: ubuntu-24.04
+#    steps:
+#      - uses: actions/checkout@v4
+#        with:
+#          submodules: recursive
+#
+#      - uses: cachix/install-nix-action@v27
+#
+#      - uses: nix-community/cache-nix-action@v6
+#        with:
+#          primary-key: nix-clang-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+#          restore-prefixes-first-match: nix-clang-${{ runner.os }}-
+#
+#      - name: Configure
+#        run: nix develop .#clang --command cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+#
+#      - name: Build
+#        run: nix develop .#clang --command cmake --build build --parallel
+#
+#      - name: Test
+#        run: nix develop .#clang --command ctest --test-dir build --output-on-failure --no-tests=error

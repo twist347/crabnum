@@ -117,11 +117,11 @@ TYPED_TEST(FloatSuite, CommonMath) {
     const cn::Num<T> e = cn::consts::e<T>;
     const cn::Num<T> pi = cn::consts::pi<T>;
 
-    EXPECT_EQ(e.sqrt(), std::sqrt(e.template as_raw<T>()));
-    EXPECT_EQ(e.cbrt(), std::cbrt(e.template as_raw<T>()));
-    EXPECT_EQ(pi.exp(), std::exp(pi.template as_raw<T>()));
-    EXPECT_EQ(pi.log(), std::log(pi.template as_raw<T>()));
-    EXPECT_EQ(pi.log10(), std::log10(pi.template as_raw<T>()));
+    EXPECT_EQ(e.sqrt(), std::sqrt(e.template as<T>()));
+    EXPECT_EQ(e.cbrt(), std::cbrt(e.template as<T>()));
+    EXPECT_EQ(pi.exp(), std::exp(pi.template as<T>()));
+    EXPECT_EQ(pi.log(), std::log(pi.template as<T>()));
+    EXPECT_EQ(pi.log10(), std::log10(pi.template as<T>()));
 }
 
 TYPED_TEST(FloatSuite, TrigFunc) {
@@ -129,12 +129,12 @@ TYPED_TEST(FloatSuite, TrigFunc) {
     const cn::Num<T> e = cn::consts::e<T>;
     const cn::Num<T> inv_pi = cn::consts::inv_pi<T>;
 
-    EXPECT_EQ(e.sin(), std::sin(e.template as_raw<T>()));
-    EXPECT_EQ(e.cos(), std::cos(e.template as_raw<T>()));
-    EXPECT_EQ(e.tan(), std::tan(e.template as_raw<T>()));
-    EXPECT_EQ(inv_pi.asin(), std::asin(inv_pi.template as_raw<T>()));
-    EXPECT_EQ(inv_pi.acos(), std::acos(inv_pi.template as_raw<T>()));
-    EXPECT_EQ(inv_pi.atan(), std::atan(inv_pi.template as_raw<T>()));
+    EXPECT_EQ(e.sin(), std::sin(e.template as<T>()));
+    EXPECT_EQ(e.cos(), std::cos(e.template as<T>()));
+    EXPECT_EQ(e.tan(), std::tan(e.template as<T>()));
+    EXPECT_EQ(inv_pi.asin(), std::asin(inv_pi.template as<T>()));
+    EXPECT_EQ(inv_pi.acos(), std::acos(inv_pi.template as<T>()));
+    EXPECT_EQ(inv_pi.atan(), std::atan(inv_pi.template as<T>()));
 }
 
 /* ---------- STD CONTAINER COMPAT ---------- */
