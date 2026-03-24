@@ -54,7 +54,7 @@ Operations: `add`, `sub`, `mul`, `div`, `rem`, `neg`, `abs`, `pow`, `shl`, `shr`
 
 **Bitwise:** `&`, `|`, `^`, `~`, `<<`, `>>`, `count_ones`, `count_zeros`, `leading_zeros`, `trailing_zeros`, `leading_ones`, `trailing_ones`, `rotate_left`, `rotate_right`, `reverse_bits`
 
-**Math:** `abs`, `min`, `max`, `clamp`, `sqrt`, `cbrt`, `exp`, `log`, `log2`, `log10`, `pow`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `hypot`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `floor`, `ceil`, `round`, `trunc`, `fract`
+**Math:** `abs`, `min`, `max`, `abs_diff`, `clamp`, `gcd`, `lcm`, `midpoint`, `sqrt`, `cbrt`, `pow`, `exp`, `exp2`, `expm1`, `log`, `log2`, `log10`, `log1p`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `hypot`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `erf`, `erfc`, `tgamma`, `lgamma`, `copysign`, `fmod`, `remainder`, `fma`, `nextafter`, `to_degrees`, `to_radians`, `floor`, `ceil`, `round`, `trunc`, `fract`
 
 **Predicates:** `is_nan`, `is_finite`, `is_inf`, `is_positive`, `is_negative`, `signum`
 

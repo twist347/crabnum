@@ -17,6 +17,7 @@
 #include <bit>
 #include <charconv>
 #include <format>
+#include <numeric>
 #include <numbers>
 
 static_assert(sizeof(float) == 4, "float must be 32-bit");
@@ -185,7 +186,7 @@ namespace cn {
         }
 
         [[nodiscard]] static constexpr auto from_string(std::string_view sv) noexcept -> std::expected<Num, std::errc> {
-            auto res = parse(sv);
+            const auto res = parse(sv);
             if (!res) {
                 return std::unexpected{res.error()};
             }
@@ -227,12 +228,48 @@ namespace cn {
             }
         }
 
-        [[nodiscard]] constexpr auto min(Num other) const noexcept -> Num { return m_v < other.m_v ? *this : other; }
-        [[nodiscard]] constexpr auto max(Num other) const noexcept -> Num { return m_v < other.m_v ? other : *this; }
+        [[nodiscard]] constexpr auto min(Num other) const noexcept -> Num {
+            return m_v < other.m_v ? *this : other;
+        }
+
+        [[nodiscard]] constexpr auto max(Num other) const noexcept -> Num {
+            return m_v < other.m_v ? other : *this;
+        }
+
+        [[nodiscard]] constexpr auto abs_diff(Num other) const noexcept {
+            if constexpr (std::unsigned_integral<T>) {
+                return m_v >= other.m_v
+                           ? Num{static_cast<T>(m_v - other.m_v)}
+                           : Num{static_cast<T>(other.m_v - m_v)};
+            } else if constexpr (std::signed_integral<T>) {
+                using U = std::make_unsigned_t<T>;
+                const auto a = static_cast<U>(m_v);
+                const auto b = static_cast<U>(other.m_v);
+                return m_v >= other.m_v
+                           ? Num<U>{static_cast<U>(a - b)}
+                           : Num<U>{static_cast<U>(b - a)};
+            } else {
+                return Num{static_cast<T>(std::abs(m_v - other.m_v))};
+            }
+        }
 
         [[nodiscard]] constexpr auto clamp(Num lo, Num hi) const noexcept -> Num {
             return this->max(lo).min(hi);
         }
+
+        [[nodiscard]] constexpr auto gcd(Num other) const noexcept -> Num requires Integral<T> {
+            return Num{static_cast<T>(std::gcd(m_v, other.m_v))};
+        }
+
+        [[nodiscard]] constexpr auto lcm(Num other) const noexcept -> Num requires Integral<T> {
+            return Num{static_cast<T>(std::lcm(m_v, other.m_v))};
+        }
+
+        [[nodiscard]] constexpr auto midpoint(Num other) const noexcept -> Num {
+            return Num{std::midpoint(m_v, other.m_v)};
+        }
+
+        /* ========== POWERS & ROOTS ========== */
 
         [[nodiscard]] constexpr auto sqrt() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::sqrt(m_v))};
@@ -242,8 +279,24 @@ namespace cn {
             return Num{static_cast<T>(std::cbrt(m_v))};
         }
 
+        template<Floating U>
+        [[nodiscard]] constexpr auto pow(Num<U> e) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
+            using R = std::common_type_t<T, U>;
+            return Num<R>{static_cast<R>(std::pow(this->as_raw<R>(), e.template as_raw<R>()))};
+        }
+
+        /* ========== EXPONENTIAL & LOGARITHMIC ========== */
+
         [[nodiscard]] constexpr auto exp() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::exp(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto exp2() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::exp2(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto expm1() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::expm1(m_v))};
         }
 
         [[nodiscard]] constexpr auto log() const -> Num requires Floating<T> {
@@ -258,10 +311,8 @@ namespace cn {
             return Num{static_cast<T>(std::log10(m_v))};
         }
 
-        template<Floating U>
-        [[nodiscard]] constexpr auto pow(Num<U> e) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
-            using R = std::common_type_t<T, U>;
-            return Num<R>{static_cast<R>(std::pow(this->as_raw<R>(), e.template as_raw<R>()))};
+        [[nodiscard]] constexpr auto log1p() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::log1p(m_v))};
         }
 
         /* ========== TRIGONOMETRY ========== */
@@ -293,7 +344,7 @@ namespace cn {
         template<Floating U>
         [[nodiscard]] constexpr auto atan2(Num<U> x) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
             using R = std::common_type_t<T, U>;
-            return Num<R>{static_cast<R>(std::atan2(this->as_raw<R>(), x.template as_raw<R>()))}; // y.atan2(x)
+            return Num<R>{static_cast<R>(std::atan2(this->as_raw<R>(), x.template as_raw<R>()))};
         }
 
         template<Floating U>
@@ -326,6 +377,54 @@ namespace cn {
 
         [[nodiscard]] constexpr auto atanh() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::atanh(m_v))};
+        }
+
+        /* ========== SPECIAL FUNCTIONS ========== */
+
+        [[nodiscard]] constexpr auto erf() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::erf(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto erfc() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::erfc(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto tgamma() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::tgamma(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto lgamma() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::lgamma(m_v))};
+        }
+
+        /* ========== FLOAT UTILS ========== */
+
+        [[nodiscard]] constexpr auto copysign(Num other) const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::copysign(m_v, other.m_v))};
+        }
+
+        [[nodiscard]] constexpr auto fmod(Num other) const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::fmod(m_v, other.m_v))};
+        }
+
+        [[nodiscard]] constexpr auto remainder(Num other) const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::remainder(m_v, other.m_v))};
+        }
+
+        [[nodiscard]] constexpr auto fma(Num a, Num b) const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::fma(m_v, a.m_v, b.m_v))};
+        }
+
+        [[nodiscard]] constexpr auto nextafter(Num other) const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::nextafter(m_v, other.m_v))};
+        }
+
+        [[nodiscard]] constexpr auto to_degrees() const noexcept -> Num requires Floating<T> {
+            return Num{static_cast<T>(m_v * (T{180} / std::numbers::pi_v<T>))};
+        }
+
+        [[nodiscard]] constexpr auto to_radians() const noexcept -> Num requires Floating<T> {
+            return Num{static_cast<T>(m_v * (std::numbers::pi_v<T> / T{180}))};
         }
 
         /* ========== ROUNDING ========== */
