@@ -20,15 +20,15 @@
           '';
         };
 
-#        clang = pkgs.mkShell {
-#          name = "c23-clang";
-#          packages = with pkgs; [ clang_22 cmake ninja lldb ];
-#          shellHook = ''
-#            export CC=clang
-#            export CXX=clang++
-#            echo "Clang: $(clang --version | head -1)"
-#          '';
-#        };
+        clang = pkgs.mkShell {
+          name = "c23-clang";
+          packages = with pkgs; [ clang_22 cmake ninja lldb ];
+          shellHook = ''
+            export CC=clang
+            export CXX=clang++
+            echo "Clang: $(clang --version | head -1)"
+          '';
+        };
 
       };
     };

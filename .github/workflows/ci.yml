@@ -28,27 +28,25 @@ jobs:
       - name: Test
         run: nix develop --command ctest --test-dir build --output-on-failure --no-tests=error
 
-# clang does not support std::float<>_t for now (clang-22.1)
+  build-clang:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-#  build-clang:
-#    runs-on: ubuntu-24.04
-#    steps:
-#      - uses: actions/checkout@v4
-#        with:
-#          submodules: recursive
-#
-#      - uses: cachix/install-nix-action@v27
-#
-#      - uses: nix-community/cache-nix-action@v6
-#        with:
-#          primary-key: nix-clang-${{ runner.os }}-${{ hashFiles('flake.lock') }}
-#          restore-prefixes-first-match: nix-clang-${{ runner.os }}-
-#
-#      - name: Configure
-#        run: nix develop .#clang --command cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-#
-#      - name: Build
-#        run: nix develop .#clang --command cmake --build build --parallel
-#
-#      - name: Test
-#        run: nix develop .#clang --command ctest --test-dir build --output-on-failure --no-tests=error
+      - uses: cachix/install-nix-action@v27
+
+      - uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: nix-clang-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: nix-clang-${{ runner.os }}-
+
+      - name: Configure
+        run: nix develop .#clang --command cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: nix develop .#clang --command cmake --build build --parallel
+
+      - name: Test
+        run: nix develop .#clang --command ctest --test-dir build --output-on-failure --no-tests=error

@@ -14,9 +14,13 @@
 #include <cstddef>
 #include <string>
 #include <array>
+#include <bit>
 #include <charconv>
-#include <stdfloat>
+#include <format>
 #include <numbers>
+
+static_assert(sizeof(float) == 4, "float must be 32-bit");
+static_assert(sizeof(double) == 8, "double must be 64-bit");
 
 namespace cn {
     template<typename T>
@@ -35,7 +39,7 @@ namespace cn {
 
         constexpr Num() = default;
 
-        constexpr Num(T v) : m_v{v} {
+        explicit constexpr Num(T v) : m_v{v} {
         }
 
         [[nodiscard]] constexpr auto value() const noexcept -> T { return m_v; }
@@ -45,26 +49,95 @@ namespace cn {
         /* ========== CAST ========== */
 
         template<Number U>
-        constexpr auto as_raw() const noexcept -> U {
+        [[nodiscard]] constexpr auto as_raw() const noexcept -> U {
             return static_cast<U>(m_v);
         }
 
         template<typename U>
-        constexpr auto as() const noexcept -> std::remove_cvref_t<U> {
+        [[nodiscard]] constexpr auto as() const noexcept -> std::remove_cvref_t<U> {
             using Out = std::remove_cvref_t<U>;
             return Out{static_cast<Out::value_type>(m_v)};
         }
 
-        constexpr auto write_to(char *buf, std::size_t len) const -> std::expected<char *, std::errc> {
+        // Returns nullopt if the value cannot be represented exactly in U.
+        template<Number U>
+        [[nodiscard]] constexpr auto try_as() const noexcept -> std::optional<Num<U> > {
+            const auto casted = static_cast<U>(m_v);
+            // round-trip check: cast back and compare
+            if (static_cast<T>(casted) != m_v) {
+                return std::nullopt;
+            }
+            // sign check: a negative value cast to unsigned may round-trip but be wrong
+            if constexpr (std::signed_integral<T> && std::unsigned_integral<U>) {
+                if (m_v < T{0}) {
+                    return std::nullopt;
+                }
+            }
+            if constexpr (std::unsigned_integral<T> && std::signed_integral<U>) {
+                if (casted < U{0}) {
+                    return std::nullopt;
+                }
+            }
+            return Num<U>{casted};
+        }
+
+        // Clamps value to target type's range before casting.
+        template<Number U>
+        [[nodiscard]] constexpr auto saturating_as() const noexcept -> Num<U> {
+            if constexpr (std::same_as<T, U>) {
+                return *this;
+            } else if constexpr (Floating<T> && Integral<U>) {
+                // float -> int: clamp to int range
+                if (std::isnan(m_v)) {
+                    return Num<U>{U{0}};
+                }
+                using W = long double;
+                const auto wide = static_cast<W>(m_v);
+                if (wide <= static_cast<W>(std::numeric_limits<U>::min())) {
+                    return Num<U>{std::numeric_limits<U>::min()};
+                }
+                if (wide >= static_cast<W>(std::numeric_limits<U>::max())) {
+                    return Num<U>{std::numeric_limits<U>::max()};
+                }
+                return Num<U>{static_cast<U>(m_v)};
+            } else if constexpr (std::signed_integral<T> && std::unsigned_integral<U>) {
+                if (m_v < T{0}) {
+                    return Num<U>{U{0}};
+                }
+                auto u = static_cast<std::make_unsigned_t<T>>(m_v);
+                if (u > std::numeric_limits<U>::max()) {
+                    return Num<U>{std::numeric_limits<U>::max()};
+                }
+                return Num<U>{static_cast<U>(u)};
+            } else if constexpr (std::unsigned_integral<T> && std::signed_integral<U>) {
+                if (m_v > static_cast<std::make_unsigned_t<U>>(std::numeric_limits<U>::max())) {
+                    return Num<U>{std::numeric_limits<U>::max()};
+                }
+                return Num<U>{static_cast<U>(m_v)};
+            } else {
+                // same signedness integers, or float->float
+                if (m_v < std::numeric_limits<U>::lowest()) {
+                    return Num<U>{std::numeric_limits<U>::lowest()};
+                }
+                if (m_v > std::numeric_limits<U>::max()) {
+                    return Num<U>{std::numeric_limits<U>::max()};
+                }
+                return Num<U>{static_cast<U>(m_v)};
+            }
+        }
+
+        [[nodiscard]] constexpr auto write_to(
+            char *buf, std::size_t len
+        ) const noexcept -> std::expected<char *, std::errc> {
             if constexpr (Integral<T>) {
-                auto [ptr, ec] = std::to_chars(buf, buf + len, m_v);
+                const auto [ptr, ec] = std::to_chars(buf, buf + len, m_v);
                 if (ec != std::errc{}) {
                     return std::unexpected{ec};
                 }
                 return ptr;
             } else {
                 using Raw = std::conditional_t<sizeof(T) <= 4, float, double>;
-                auto [ptr, ec] = std::to_chars(
+                const auto [ptr, ec] = std::to_chars(
                     buf, buf + len,
                     static_cast<Raw>(m_v),
                     std::chars_format::general,
@@ -77,14 +150,16 @@ namespace cn {
             }
         }
 
-        static constexpr auto parse(std::string_view sv) -> std::expected<std::pair<Num, const char *>, std::errc> {
+        [[nodiscard]] static constexpr auto parse(
+            std::string_view sv
+        ) noexcept -> std::expected<std::pair<Num, const char *>, std::errc> {
             if (sv.empty()) {
                 return std::unexpected{std::errc::invalid_argument};
             }
 
             T val{};
             if constexpr (Integral<T>) {
-                auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
+                const auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
                 if (ec != std::errc{}) {
                     return std::unexpected{ec};
                 }
@@ -92,7 +167,7 @@ namespace cn {
             } else {
                 using Raw = std::conditional_t<sizeof(T) <= 4, float, double>;
                 Raw raw{};
-                auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), raw);
+                const auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), raw);
                 if (ec != std::errc{}) {
                     return std::unexpected{ec};
                 }
@@ -109,12 +184,12 @@ namespace cn {
             return std::string(buf.data(), *res);
         }
 
-        static constexpr auto from_string(std::string_view sv) -> std::expected<Num, std::errc> {
+        [[nodiscard]] static constexpr auto from_string(std::string_view sv) noexcept -> std::expected<Num, std::errc> {
             auto res = parse(sv);
             if (!res) {
                 return std::unexpected{res.error()};
             }
-            auto [num, ptr] = *res;
+            const auto [num, ptr] = *res;
             if (ptr != sv.data() + sv.size()) {
                 return std::unexpected{std::errc::invalid_argument};
             }
@@ -123,8 +198,17 @@ namespace cn {
 
         /* ========== LIMITS ========== */
 
-        static constexpr Num MIN{std::numeric_limits<T>::lowest()};
-        static constexpr Num MAX{std::numeric_limits<T>::max()};
+        [[nodiscard]] static constexpr auto MIN_VAL() noexcept -> Num { return Num{std::numeric_limits<T>::lowest()}; }
+        [[nodiscard]] static constexpr auto MAX_VAL() noexcept -> Num { return Num{std::numeric_limits<T>::max()}; }
+        [[nodiscard]] static constexpr auto EPS_VAL() noexcept -> Num { return Num{std::numeric_limits<T>::epsilon()}; }
+
+        [[nodiscard]] static constexpr auto INF_VAL() noexcept -> Num {
+            return Num{std::numeric_limits<T>::infinity()};
+        }
+
+        [[nodiscard]] static constexpr auto NAN_VAL() noexcept -> Num {
+            return Num{std::numeric_limits<T>::quiet_NaN()};
+        }
 
         /* ========== COMMON MATH ========== */
 
@@ -134,8 +218,12 @@ namespace cn {
             } else if constexpr (Floating<T>) {
                 return Num{static_cast<T>(std::abs(m_v))};
             } else {
-                // signed integral
-                return m_v < 0 ? Num{static_cast<T>(-m_v)} : *this;
+                // signed integral: use unsigned negate to avoid UB on MIN_VAL
+                if (m_v < T{0}) {
+                    using U = std::make_unsigned_t<T>;
+                    return Num{static_cast<T>(static_cast<U>(0) - static_cast<U>(m_v))};
+                }
+                return *this;
             }
         }
 
@@ -170,17 +258,13 @@ namespace cn {
             return Num{static_cast<T>(std::log10(m_v))};
         }
 
-        [[nodiscard]] constexpr auto pow(T e) const -> Num requires Floating<T> {
-            return Num{static_cast<T>(std::pow(m_v, e))};
-        }
-
         template<Floating U>
         [[nodiscard]] constexpr auto pow(Num<U> e) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
             using R = std::common_type_t<T, U>;
-            return Num<R>{static_cast<R>(std::pow(this->as<R>(), e.template as<R>()))};
+            return Num<R>{static_cast<R>(std::pow(this->as_raw<R>(), e.template as_raw<R>()))};
         }
 
-        // trig funcs
+        /* ========== TRIGONOMETRY ========== */
 
         [[nodiscard]] constexpr auto sin() const -> Num requires Floating<T> {
             return Num{static_cast<T>(std::sin(m_v))};
@@ -209,13 +293,39 @@ namespace cn {
         template<Floating U>
         [[nodiscard]] constexpr auto atan2(Num<U> x) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
             using R = std::common_type_t<T, U>;
-            return Num<R>{static_cast<R>(std::atan2(this->as<R>(), x.template as<R>()))}; // y.atan2(x)
+            return Num<R>{static_cast<R>(std::atan2(this->as_raw<R>(), x.template as_raw<R>()))}; // y.atan2(x)
         }
 
         template<Floating U>
         [[nodiscard]] constexpr auto hypot(Num<U> x) const -> Num<std::common_type_t<T, U> > {
             using R = std::common_type_t<T, U>;
-            return Num<R>{static_cast<R>(std::hypot(this->as<R>(), x.template as<R>()))};
+            return Num<R>{static_cast<R>(std::hypot(this->as_raw<R>(), x.template as_raw<R>()))};
+        }
+
+        /* ========== HYPERBOLIC ========== */
+
+        [[nodiscard]] constexpr auto sinh() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::sinh(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto cosh() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::cosh(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto tanh() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::tanh(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto asinh() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::asinh(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto acosh() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::acosh(m_v))};
+        }
+
+        [[nodiscard]] constexpr auto atanh() const -> Num requires Floating<T> {
+            return Num{static_cast<T>(std::atanh(m_v))};
         }
 
         /* ========== ROUNDING ========== */
@@ -254,10 +364,47 @@ namespace cn {
             return std::isinf(m_v);
         }
 
+        [[nodiscard]] constexpr auto is_positive() const noexcept -> bool {
+            return m_v > T{0};
+        }
+
+        [[nodiscard]] constexpr auto is_negative() const noexcept -> bool {
+            if constexpr (std::unsigned_integral<T>) {
+                return false;
+            } else {
+                return m_v < T{0};
+            }
+        }
+
+        [[nodiscard]] constexpr auto signum() const noexcept -> Num {
+            if constexpr (Floating<T>) {
+                if (std::isnan(m_v)) {
+                    return Num{std::numeric_limits<T>::quiet_NaN()};
+                }
+            }
+            if (m_v > T{0}) {
+                return Num{T{1}};
+            }
+            if constexpr (std::unsigned_integral<T>) {
+                return Num{T{0}};
+            } else {
+                return m_v < T{0} ? Num{T{-1}} : Num{T{0}};
+            }
+        }
+
         /* ========== UNARY ========== */
 
-        constexpr auto operator+() const noexcept -> Num { return *this; }
-        constexpr auto operator-() const noexcept -> Num { return Num{static_cast<T>(-m_v)}; }
+        [[nodiscard]] constexpr auto operator+() const noexcept -> Num { return *this; }
+
+        [[nodiscard]] constexpr auto operator-() const noexcept -> Num {
+            if constexpr (std::signed_integral<T>) {
+                // unsigned negate to avoid UB on MIN_VAL
+                using U = std::make_unsigned_t<T>;
+                return Num{static_cast<T>(static_cast<U>(0) - static_cast<U>(m_v))};
+            } else {
+                return Num{static_cast<T>(-m_v)};
+            }
+        }
 
         /* ========== INCR/DECR ========== */
 
@@ -283,7 +430,7 @@ namespace cn {
             return tmp;
         }
 
-        /* ========== COMPOUND ASSIGNMENTS (STRICT: SAME T ONLY) ========== */
+        /* ========== COMPOUND ASSIGNMENTS ========== */
 
         constexpr auto operator+=(Num rhs) noexcept -> Num & {
             m_v += rhs.m_v;
@@ -310,246 +457,433 @@ namespace cn {
             return *this;
         }
 
-        // primitive same-type only
-        constexpr auto operator+=(T rhs) noexcept -> Num & {
-            m_v += rhs;
+        /* ========== BITWISE OPERATORS ========== */
+
+        constexpr auto operator&=(Num rhs) noexcept -> Num & requires Integral<T> {
+            m_v &= rhs.m_v;
             return *this;
         }
 
-        constexpr auto operator-=(T rhs) noexcept -> Num & {
-            m_v -= rhs;
+        constexpr auto operator|=(Num rhs) noexcept -> Num & requires Integral<T> {
+            m_v |= rhs.m_v;
             return *this;
         }
 
-        constexpr auto operator*=(T rhs) noexcept -> Num & {
-            m_v *= rhs;
+        constexpr auto operator^=(Num rhs) noexcept -> Num & requires Integral<T> {
+            m_v ^= rhs.m_v;
             return *this;
         }
 
-        constexpr auto operator/=(T rhs) noexcept -> Num & {
-            m_v /= rhs;
+        [[nodiscard]] constexpr auto operator~() const noexcept -> Num requires Integral<T> {
+            return Num{static_cast<T>(~m_v)};
+        }
+
+        constexpr auto operator<<=(std::uint32_t shift) noexcept -> Num & requires Integral<T> {
+            m_v <<= shift;
             return *this;
         }
 
-        constexpr auto operator%=(T rhs) noexcept -> Num & requires Integral<T> {
-            m_v %= rhs;
+        constexpr auto operator>>=(std::uint32_t shift) noexcept -> Num & requires Integral<T> {
+            m_v >>= shift;
             return *this;
+        }
+
+        /* ========== BITWISE INTRINSICS ========== */
+
+        [[nodiscard]] constexpr auto count_ones() const noexcept
+            -> std::uint32_t requires Integral<T> {
+            return static_cast<std::uint32_t>(std::popcount(static_cast<std::make_unsigned_t<T>>(m_v)));
+        }
+
+        [[nodiscard]] constexpr auto count_zeros() const noexcept
+            -> std::uint32_t requires Integral<T> {
+            return static_cast<std::uint32_t>(sizeof(T) * 8u) - count_ones();
+        }
+
+        [[nodiscard]] constexpr auto leading_zeros() const noexcept
+            -> std::uint32_t requires Integral<T> {
+            return static_cast<std::uint32_t>(std::countl_zero(static_cast<std::make_unsigned_t<T>>(m_v)));
+        }
+
+        [[nodiscard]] constexpr auto leading_ones() const noexcept
+            -> std::uint32_t requires Integral<T> {
+            return static_cast<std::uint32_t>(std::countl_one(static_cast<std::make_unsigned_t<T>>(m_v)));
+        }
+
+        [[nodiscard]] constexpr auto trailing_zeros() const noexcept
+            -> std::uint32_t requires Integral<T> {
+            if (m_v == T{0}) {
+                return static_cast<std::uint32_t>(sizeof(T) * 8u);
+            }
+            return static_cast<std::uint32_t>(std::countr_zero(static_cast<std::make_unsigned_t<T>>(m_v)));
+        }
+
+        [[nodiscard]] constexpr auto trailing_ones() const noexcept
+            -> std::uint32_t requires Integral<T> {
+            return static_cast<std::uint32_t>(std::countr_one(static_cast<std::make_unsigned_t<T>>(m_v)));
+        }
+
+        [[nodiscard]] constexpr auto rotate_left(std::uint32_t n) const noexcept
+            -> Num requires Integral<T> {
+            return Num{static_cast<T>(std::rotl(static_cast<std::make_unsigned_t<T>>(m_v), static_cast<int>(n)))};
+        }
+
+        [[nodiscard]] constexpr auto rotate_right(std::uint32_t n) const noexcept
+            -> Num requires Integral<T> {
+            return Num{static_cast<T>(std::rotr(static_cast<std::make_unsigned_t<T>>(m_v), static_cast<int>(n)))};
+        }
+
+        [[nodiscard]] constexpr auto reverse_bits() const noexcept
+            -> Num requires Integral<T> {
+            using U = std::make_unsigned_t<T>;
+            U v = static_cast<U>(m_v);
+            U result = 0;
+            for (std::uint32_t i = 0; i < sizeof(T) * 8u; ++i) {
+                result = static_cast<U>((result << 1u) | (v & U{1}));
+                v >>= 1u;
+            }
+            return Num{static_cast<T>(result)};
+        }
+
+        /* ========== OVERFLOWING ARITHMETIC (base layer) ========== */
+
+        [[nodiscard]] constexpr auto overflowing_add(Num rhs) const noexcept
+            -> std::pair<Num, bool> requires Integral<T> {
+            using U = std::make_unsigned_t<T>;
+            const auto wrapped = static_cast<T>(static_cast<U>(m_v) + static_cast<U>(rhs.m_v));
+            bool ov;
+            if constexpr (std::unsigned_integral<T>) {
+                ov = wrapped < m_v;
+            } else {
+                ov = (rhs.m_v > T{0} && wrapped < m_v) || (rhs.m_v < T{0} && wrapped > m_v);
+            }
+            return {Num{wrapped}, ov};
+        }
+
+        [[nodiscard]] constexpr auto overflowing_sub(Num rhs) const noexcept
+            -> std::pair<Num, bool> requires Integral<T> {
+            using U = std::make_unsigned_t<T>;
+            const auto wrapped = static_cast<T>(static_cast<U>(m_v) - static_cast<U>(rhs.m_v));
+            bool ov;
+            if constexpr (std::unsigned_integral<T>) {
+                ov = m_v < rhs.m_v;
+            } else {
+                ov = (rhs.m_v > T{0} && wrapped > m_v) || (rhs.m_v < T{0} && wrapped < m_v);
+            }
+            return {Num{wrapped}, ov};
+        }
+
+        [[nodiscard]] constexpr auto overflowing_mul(Num rhs) const noexcept
+            -> std::pair<Num, bool> requires Integral<T> {
+            using U = std::make_unsigned_t<T>;
+            const auto wrapped = static_cast<T>(static_cast<U>(m_v) * static_cast<U>(rhs.m_v));
+            if (m_v == T{0} || rhs.m_v == T{0}) {
+                return {Num{T{0}}, false};
+            }
+            if constexpr (std::signed_integral<T>) {
+                // handle -1 cases separately: back-division with -1 can itself be UB
+                if (m_v == T{-1}) {
+                    return {Num{wrapped}, rhs.m_v == std::numeric_limits<T>::min()};
+                }
+                if (rhs.m_v == T{-1}) {
+                    return {Num{wrapped}, m_v == std::numeric_limits<T>::min()};
+                }
+            }
+            // overflow iff back-division doesn't round-trip
+            return {Num{wrapped}, wrapped / m_v != rhs.m_v};
+        }
+
+        [[nodiscard]] constexpr auto overflowing_div(Num rhs) const noexcept
+            -> std::pair<Num, bool> requires Integral<T> {
+            if constexpr (std::signed_integral<T>) {
+                if (m_v == std::numeric_limits<T>::min() && rhs.m_v == T{-1}) {
+                    return {Num{std::numeric_limits<T>::min()}, true};
+                }
+            }
+            return {Num{static_cast<T>(m_v / rhs.m_v)}, false};
+        }
+
+        [[nodiscard]] constexpr auto overflowing_rem(Num rhs) const noexcept
+            -> std::pair<Num, bool> requires Integral<T> {
+            if constexpr (std::signed_integral<T>) {
+                if (m_v == std::numeric_limits<T>::min() && rhs.m_v == T{-1}) {
+                    return {Num{T{0}}, true};
+                }
+            }
+            return {Num{static_cast<T>(m_v % rhs.m_v)}, false};
+        }
+
+        [[nodiscard]] constexpr auto overflowing_neg() const noexcept
+            -> std::pair<Num, bool> requires Integral<T> {
+            using U = std::make_unsigned_t<T>;
+            const auto wrapped = Num{static_cast<T>(static_cast<U>(0) - static_cast<U>(m_v))};
+            if constexpr (std::signed_integral<T>) {
+                return {wrapped, m_v == std::numeric_limits<T>::min()};
+            } else {
+                return {wrapped, m_v != T{0}};
+            }
+        }
+
+        [[nodiscard]] constexpr auto overflowing_abs() const noexcept
+            -> std::pair<Num, bool> requires std::signed_integral<T> {
+            if (m_v == std::numeric_limits<T>::min()) {
+                return {Num{std::numeric_limits<T>::min()}, true};
+            }
+            return {Num{static_cast<T>(m_v < T{0} ? -m_v : m_v)}, false};
+        }
+
+        [[nodiscard]] constexpr auto overflowing_pow(std::uint32_t exp) const noexcept
+            -> std::pair<Num, bool> requires Integral<T> {
+            Num base{*this};
+            Num res{T{1}};
+            bool ov = false;
+
+            while (exp > 0u) {
+                if (exp & 1u) {
+                    const auto [r, o] = res.overflowing_mul(base);
+                    res = r;
+                    ov = ov || o;
+                }
+                exp >>= 1u;
+                if (exp > 0u) {
+                    const auto [b, o] = base.overflowing_mul(base);
+                    base = b;
+                    ov = ov || o;
+                }
+            }
+            return {res, ov};
+        }
+
+        [[nodiscard]] constexpr auto overflowing_shl(std::uint32_t shift) const noexcept
+            -> std::pair<Num, bool> requires Integral<T> {
+            constexpr auto bits = static_cast<std::uint32_t>(sizeof(T) * 8u);
+            return {Num{static_cast<T>(m_v << (shift % bits))}, shift >= bits};
+        }
+
+        [[nodiscard]] constexpr auto overflowing_shr(std::uint32_t shift) const noexcept
+            -> std::pair<Num, bool> requires Integral<T> {
+            constexpr auto bits = static_cast<std::uint32_t>(sizeof(T) * 8u);
+            return {Num{static_cast<T>(m_v >> (shift % bits))}, shift >= bits};
+        }
+
+        /* ========== WRAPPING ARITHMETIC ========== */
+
+        [[nodiscard]] constexpr auto wrapping_add(Num rhs) const noexcept -> Num requires Integral<T> {
+            return overflowing_add(rhs).first;
+        }
+
+        [[nodiscard]] constexpr auto wrapping_sub(Num rhs) const noexcept -> Num requires Integral<T> {
+            return overflowing_sub(rhs).first;
+        }
+
+        [[nodiscard]] constexpr auto wrapping_mul(Num rhs) const noexcept
+            -> Num requires Integral<T> {
+            return overflowing_mul(rhs).first;
+        }
+
+        [[nodiscard]] constexpr auto wrapping_div(Num rhs) const noexcept
+            -> Num requires Integral<T> {
+            return overflowing_div(rhs).first;
+        }
+
+        [[nodiscard]] constexpr auto wrapping_rem(Num rhs) const noexcept
+            -> Num requires Integral<T> {
+            return overflowing_rem(rhs).first;
+        }
+
+        [[nodiscard]] constexpr auto wrapping_neg() const noexcept
+            -> Num requires Integral<T> {
+            return overflowing_neg().first;
+        }
+
+        [[nodiscard]] constexpr auto wrapping_abs() const noexcept
+            -> Num requires std::signed_integral<T> {
+            return overflowing_abs().first;
+        }
+
+        [[nodiscard]] constexpr auto wrapping_pow(std::uint32_t exp) const noexcept
+            -> Num requires Integral<T> {
+            return overflowing_pow(exp).first;
+        }
+
+        [[nodiscard]] constexpr auto wrapping_shl(std::uint32_t shift) const noexcept
+            -> Num requires Integral<T> {
+            return overflowing_shl(shift).first;
+        }
+
+        [[nodiscard]] constexpr auto wrapping_shr(std::uint32_t shift) const noexcept
+            -> Num requires Integral<T> {
+            return overflowing_shr(shift).first;
         }
 
         /* ========== CHECKED ARITHMETIC ========== */
 
         [[nodiscard]] constexpr auto checked_add(Num rhs) const noexcept
             -> std::optional<Num> requires Integral<T> {
-            T res{};
-            if (add_overflows(m_v, rhs.m_v, res))
-                return std::nullopt;
-            return Num{res};
+            const auto [res, ov] = overflowing_add(rhs);
+            return ov ? std::nullopt : std::optional{res};
         }
 
         [[nodiscard]] constexpr auto checked_sub(Num rhs) const noexcept
             -> std::optional<Num> requires Integral<T> {
-            T res{};
-            if (sub_overflows(m_v, rhs.m_v, res))
-                return std::nullopt;
-            return Num{res};
+            const auto [res, ov] = overflowing_sub(rhs);
+            return ov ? std::nullopt : std::optional{res};
         }
 
         [[nodiscard]] constexpr auto checked_mul(Num rhs) const noexcept
             -> std::optional<Num> requires Integral<T> {
-            T res{};
-            if (mul_overflows(m_v, rhs.m_v, res))
-                return std::nullopt;
-            return Num{res};
+            const auto [res, ov] = overflowing_mul(rhs);
+            return ov ? std::nullopt : std::optional{res};
         }
 
-        // Two nullopt cases:
-        //   1. division by zero
-        //   2. signed MIN / -1  →  result would be MAX+1 (hardware trap on x86)
         [[nodiscard]] constexpr auto checked_div(Num rhs) const noexcept
             -> std::optional<Num> requires Integral<T> {
             if (rhs.m_v == T{0}) {
                 return std::nullopt;
             }
-            if constexpr (std::signed_integral<T>) {
-                if (m_v == std::numeric_limits<T>::min() && rhs.m_v == T{-1}) {
-                    return std::nullopt;
-                }
-            }
-            return Num{static_cast<T>(m_v / rhs.m_v)};
+            const auto [res, ov] = overflowing_div(rhs);
+            return ov ? std::nullopt : std::optional{res};
         }
 
-        // Same two guards as checked_div.
         [[nodiscard]] constexpr auto checked_rem(Num rhs) const noexcept
             -> std::optional<Num> requires Integral<T> {
             if (rhs.m_v == T{0}) {
                 return std::nullopt;
             }
-            if constexpr (std::signed_integral<T>) {
-                if (m_v == std::numeric_limits<T>::min() && rhs.m_v == T{-1}) {
-                    return std::nullopt;
-                }
-            }
-            return Num{static_cast<T>(m_v % rhs.m_v)};
+            const auto [res, ov] = overflowing_rem(rhs);
+            return ov ? std::nullopt : std::optional{res};
         }
 
-        // Only for signed: unsigned negation is meaningless.
-        // nullopt when value == MIN  (−MIN == MAX+1, doesn't fit)
         [[nodiscard]] constexpr auto checked_neg() const noexcept
             -> std::optional<Num> requires std::signed_integral<T> {
-            if (m_v == std::numeric_limits<T>::min()) {
-                return std::nullopt;
-            }
-            return Num{static_cast<T>(-m_v)};
+            const auto [res, ov] = overflowing_neg();
+            return ov ? std::nullopt : std::optional{res};
         }
 
-        // Only for signed: unsigned abs is identity, adding it would be noise.
-        // nullopt when value == MIN  (|MIN| == MAX+1, doesn't fit)
         [[nodiscard]] constexpr auto checked_abs() const noexcept
             -> std::optional<Num> requires std::signed_integral<T> {
-            if (m_v == std::numeric_limits<T>::min()) {
-                return std::nullopt;
-            }
-            return Num{static_cast<T>(m_v < T{0} ? -m_v : m_v)};
+            const auto [res, ov] = overflowing_abs();
+            return ov ? std::nullopt : std::optional{res};
         }
 
-        // Binary exponentiation with overflow check at every multiplication.
-        // Exponent is uint32_t — same as Rust's i32::checked_pow(u32).
-        // x.checked_pow(0) == Some(1) for all x, including 0 (0^0 = 1 by convention).
-        [[nodiscard]] constexpr auto checked_pow(std::uint32_t exp) const noexcept
+        [[nodiscard]] constexpr auto
+        checked_pow(std::uint32_t exp) const noexcept
             -> std::optional<Num> requires Integral<T> {
-            Num base{*this};
-            Num res{T{1}};
-
-            while (exp > 0u) {
-                if (exp & 1u) {
-                    T tmp{};
-                    if (mul_overflows(res.m_v, base.m_v, tmp)) {
-                        return std::nullopt;
-                    }
-                    res = Num{tmp};
-                }
-                exp >>= 1u;
-                if (exp > 0u) {
-                    // guard the squaring only when we'll use base again
-                    T tmp{};
-                    if (mul_overflows(base.m_v, base.m_v, tmp)) {
-                        return std::nullopt;
-                    }
-                    base = Num{tmp};
-                }
-            }
-            return res;
+            const auto [res, ov] = overflowing_pow(exp);
+            return ov ? std::nullopt : std::optional{res};
         }
 
-        // nullopt when shift >= bit width of T.
         [[nodiscard]] constexpr auto checked_shl(std::uint32_t shift) const noexcept
             -> std::optional<Num> requires Integral<T> {
-            if (constexpr auto bits = static_cast<std::uint32_t>(sizeof(T) * 8u); shift >= bits) {
-                return std::nullopt;
-            }
-            return Num{static_cast<T>(m_v << shift)};
+            const auto [res, ov] = overflowing_shl(shift);
+            return ov ? std::nullopt : std::optional{res};
         }
 
         [[nodiscard]] constexpr auto checked_shr(std::uint32_t shift) const noexcept
             -> std::optional<Num> requires Integral<T> {
-            if (constexpr auto bits = static_cast<std::uint32_t>(sizeof(T) * 8u); shift >= bits) {
-                return std::nullopt;
+            const auto [res, ov] = overflowing_shr(shift);
+            return ov ? std::nullopt : std::optional{res};
+        }
+
+        /* ========== SATURATING ARITHMETIC ========== */
+
+        [[nodiscard]] constexpr auto saturating_add(Num rhs) const noexcept
+            -> Num requires Integral<T> {
+            const auto [res, ov] = overflowing_add(rhs);
+            if (!ov) {
+                return res;
             }
-            return Num{static_cast<T>(m_v >> shift)};
+            if constexpr (std::unsigned_integral<T>) {
+                return MAX_VAL();
+            } else {
+                return rhs.m_v > T{0} ? MAX_VAL() : MIN_VAL();
+            }
+        }
+
+        [[nodiscard]] constexpr auto saturating_sub(Num rhs) const noexcept
+            -> Num requires Integral<T> {
+            const auto [res, ov] = overflowing_sub(rhs);
+            if (!ov) {
+                return res;
+            }
+            if constexpr (std::unsigned_integral<T>) {
+                return MIN_VAL();
+            } else {
+                return rhs.m_v > T{0} ? MIN_VAL() : MAX_VAL();
+            }
+        }
+
+        [[nodiscard]] constexpr auto saturating_mul(Num rhs) const noexcept
+            -> Num requires Integral<T> {
+            const auto [res, ov] = overflowing_mul(rhs);
+            if (!ov) {
+                return res;
+            }
+            if constexpr (std::unsigned_integral<T>) {
+                return MAX_VAL();
+            } else {
+                return (m_v > T{0}) == (rhs.m_v > T{0}) ? MAX_VAL() : MIN_VAL();
+            }
+        }
+
+        [[nodiscard]] constexpr auto saturating_div(Num rhs) const noexcept
+            -> Num requires Integral<T> {
+            const auto [res, ov] = overflowing_div(rhs);
+            return ov ? MAX_VAL() : res;
+        }
+
+        [[nodiscard]] constexpr auto saturating_neg() const noexcept
+            -> Num requires std::signed_integral<T> {
+            const auto [res, ov] = overflowing_neg();
+            return ov ? MAX_VAL() : res;
+        }
+
+        [[nodiscard]] constexpr auto saturating_abs() const noexcept
+            -> Num requires std::signed_integral<T> {
+            const auto [res, ov] = overflowing_abs();
+            return ov ? MAX_VAL() : res;
+        }
+
+        [[nodiscard]] constexpr auto saturating_pow(std::uint32_t exp) const noexcept
+            -> Num requires Integral<T> {
+            const auto [res, ov] = overflowing_pow(exp);
+            if (!ov) {
+                return res;
+            }
+            if constexpr (std::unsigned_integral<T>) {
+                return MAX_VAL();
+            } else {
+                const bool result_negative = m_v < T{0} && (exp & 1u);
+                return result_negative ? MIN_VAL() : MAX_VAL();
+            }
         }
 
         /* ========== COMPARISON ========== */
 
-        constexpr bool operator==(const Num &) const noexcept = default;
-
-        constexpr bool operator!=(const Num &) const noexcept = default;
+        constexpr auto operator==(const Num &) const noexcept -> bool = default;
 
         constexpr auto operator<=>(const Num &) const noexcept = default;
 
     private:
-        [[nodiscard]] static constexpr auto add_overflows(T a, T b, T &out) noexcept
-            -> bool requires Integral<T> {
-            if constexpr (std::unsigned_integral<T>) {
-                out = static_cast<T>(a + b);
-                return out < a; // unsigned wraparound is well-defined, detect by result < a
-            } else {
-                // signed: check BEFORE performing the operation to avoid UB
-                if (
-                    (b > T{0} && a > std::numeric_limits<T>::max() - b) ||
-                    (b < T{0} && a < std::numeric_limits<T>::min() - b)
-                ) {
-                    return true;
-                }
-                out = a + b;
-                return false;
-            }
-        }
-
-        [[nodiscard]] static constexpr auto sub_overflows(T a, T b, T &out) noexcept
-            -> bool requires Integral<T> {
-            if constexpr (std::unsigned_integral<T>) {
-                out = static_cast<T>(a - b);
-                return a < b; // unsigned: wraps if a < b
-            } else {
-                // a - b == a + (-b), but -b can itself overflow if b == MIN
-                if (
-                    (b < T{0} && a > std::numeric_limits<T>::max() + b) ||
-                    (b > T{0} && a < std::numeric_limits<T>::min() + b)
-                ) {
-                    return true;
-                }
-                return false;
-            }
-        }
-
-        [[nodiscard]] static constexpr auto mul_overflows(T a, T b, T &out) noexcept
-            -> bool requires Integral<T> {
-            if (a == T{0} || b == T{0}) {
-                out = T{0};
-                return false;
-            }
-
-            if constexpr (std::unsigned_integral<T>) {
-                // a * b > MAX  <=>  a > MAX / b  (b != 0 already checked)
-                if (a > std::numeric_limits<T>::max() / b) {
-                    return true;
-                }
-                out = a * b;
-                return false;
-            } else {
-                // signed: four quadrant checks, all using only / which is safe here
-                // because we've already excluded 0, and handle -1 separately
-                if (a == T{-1}) {
-                    // -1 * b overflows only when b == MIN (result == MAX+1)
-                    if (b == std::numeric_limits<T>::min()) {
-                        return true;
-                    }
-                    out = -b;
-                    return false;
-                }
-                if (b == T{-1}) {
-                    if (a == std::numeric_limits<T>::min()) {
-                        return true;
-                    }
-                    out = -a;
-                    return false;
-                }
-                // both non-zero, neither is -1 → division is safe
-                if (
-                    (a > T{0} && b > T{0} && a > std::numeric_limits<T>::max() / b) ||
-                    (a < T{0} && b < T{0} && a < std::numeric_limits<T>::max() / b) ||
-                    (a > T{0} && b < T{0} && b < std::numeric_limits<T>::min() / a) ||
-                    (a < T{0} && b > T{0} && a < std::numeric_limits<T>::min() / b)
-                ) {
-                    return true;
-                }
-                out = a * b;
-                return false;
-            }
-        }
-
         T m_v{};
     };
+
+    /* ========== NUM CONCEPTS ========== */
+
+    template<typename T>
+    concept IsNum = requires { typename T::value_type; } && std::same_as<T, Num<typename T::value_type> >;
+
+    template<typename T>
+    concept IsIntNum = IsNum<T> && Integral<typename T::value_type>;
+
+    template<typename T>
+    concept IsSignedNum = IsNum<T> && std::signed_integral<typename T::value_type>;
+
+    template<typename T>
+    concept IsUnsignedNum = IsNum<T> && std::unsigned_integral<typename T::value_type>;
+
+    template<typename T>
+    concept IsFloatNum = IsNum<T> && Floating<typename T::value_type>;
 
     /* ========== Num op Num ========== */
 
@@ -583,60 +917,37 @@ namespace cn {
         return lhs;
     }
 
-    /* ========== Num op T ========== */
+    /* ========== Num bitwise Num ========== */
 
-    template<Number T>
-    constexpr auto operator+(Num<T> lhs, T rhs) noexcept -> Num<T> {
-        lhs += rhs;
-        return lhs;
-    }
-
-    template<Number T>
-    constexpr auto operator-(Num<T> lhs, T rhs) noexcept -> Num<T> {
-        lhs -= rhs;
-        return lhs;
-    }
-
-    template<Number T>
-    constexpr auto operator*(Num<T> lhs, T rhs) noexcept -> Num<T> {
-        lhs *= rhs;
-        return lhs;
-    }
-
-    template<Number T>
-    constexpr auto operator/(Num<T> lhs, T rhs) noexcept -> Num<T> {
-        lhs /= rhs;
+    template<Integral T>
+    constexpr auto operator&(Num<T> lhs, Num<T> rhs) noexcept -> Num<T> {
+        lhs &= rhs;
         return lhs;
     }
 
     template<Integral T>
-    constexpr auto operator%(Num<T> lhs, T rhs) noexcept -> Num<T> {
-        lhs %= rhs;
+    constexpr auto operator|(Num<T> lhs, Num<T> rhs) noexcept -> Num<T> {
+        lhs |= rhs;
         return lhs;
     }
 
-    /* ========== T op Num ========== */
-
-    template<Number T>
-    constexpr auto operator+(T lhs, Num<T> rhs) noexcept -> Num<T> {
-        rhs += lhs;
-        return rhs;
+    template<Integral T>
+    constexpr auto operator^(Num<T> lhs, Num<T> rhs) noexcept -> Num<T> {
+        lhs ^= rhs;
+        return lhs;
     }
-
-    template<Number T>
-    constexpr auto operator-(T lhs, Num<T> rhs) noexcept -> Num<T> { return Num<T>{lhs} - rhs; }
-
-    template<Number T>
-    constexpr auto operator*(T lhs, Num<T> rhs) noexcept -> Num<T> {
-        rhs *= lhs;
-        return rhs;
-    }
-
-    template<Number T>
-    constexpr auto operator/(T lhs, Num<T> rhs) noexcept -> Num<T> { return Num<T>{lhs} / rhs; }
 
     template<Integral T>
-    constexpr auto operator%(T lhs, Num<T> rhs) noexcept -> Num<T> { return Num<T>{lhs} % rhs; }
+    constexpr auto operator<<(Num<T> lhs, std::uint32_t shift) noexcept -> Num<T> {
+        lhs <<= shift;
+        return lhs;
+    }
+
+    template<Integral T>
+    constexpr auto operator>>(Num<T> lhs, std::uint32_t shift) noexcept -> Num<T> {
+        lhs >>= shift;
+        return lhs;
+    }
 
     /* ========== STREAMS ========== */
 
@@ -678,11 +989,6 @@ namespace cn {
         return is;
     }
 
-    template<typename T, Number U>
-    constexpr auto as(U u) noexcept -> Num<T> {
-        return Num<T>{static_cast<T>(u)};
-    }
-
     /* ========== ALIASES ========== */
 
     using i8 = Num<std::int8_t>;
@@ -698,8 +1004,8 @@ namespace cn {
     using isize = Num<std::ptrdiff_t>;
     using usize = Num<std::size_t>;
 
-    using f32 = Num<std::float32_t>;
-    using f64 = Num<std::float64_t>;
+    using f32 = Num<float>;
+    using f64 = Num<double>;
 }
 
 /* ========== std::hash ========== */
@@ -736,11 +1042,11 @@ namespace cn::literals {
     constexpr isize operator""_isize(unsigned long long v) noexcept { return isize{static_cast<std::ptrdiff_t>(v)}; }
     constexpr usize operator""_usize(unsigned long long v) noexcept { return usize{static_cast<std::size_t>(v)}; }
 
-    constexpr f32 operator""_f32(long double v) noexcept { return f32{static_cast<std::float32_t>(v)}; }
-    constexpr f64 operator""_f64(long double v) noexcept { return f64{static_cast<std::float64_t>(v)}; }
+    constexpr f32 operator""_f32(long double v) noexcept { return f32{static_cast<float>(v)}; }
+    constexpr f64 operator""_f64(long double v) noexcept { return f64{static_cast<double>(v)}; }
 
-    constexpr f32 operator""_f32(unsigned long long v) noexcept { return f32{static_cast<std::float32_t>(v)}; }
-    constexpr f64 operator""_f64(unsigned long long v) noexcept { return f64{static_cast<std::float64_t>(v)}; }
+    constexpr f32 operator""_f32(unsigned long long v) noexcept { return f32{static_cast<float>(v)}; }
+    constexpr f64 operator""_f64(unsigned long long v) noexcept { return f64{static_cast<double>(v)}; }
 }
 
 /* ========== CONSTS ========== */

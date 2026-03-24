@@ -1,0 +1,2 @@
+- [ ] Migrate `f32`/`f64` from `float`/`double` to `std::float32_t`/`std::float64_t` when Clang adds `<stdfloat>` support
+- [ ] `checked_add` is ~13x slower than hand-rolled overflow check — optimize (avoid delegating through `overflowing_add` + `std::optional` overhead)
