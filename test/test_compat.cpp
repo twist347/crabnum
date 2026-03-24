@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
-#include "crabnum.h"
+
 #include <unordered_set>
 #include <format>
 #include <numeric>
 #include <vector>
 #include <algorithm>
+
+#include "crabnum.h"
 
 TEST(Compat, StdHash) {
     std::unordered_set<cn::i32> s;
@@ -15,18 +17,18 @@ TEST(Compat, StdHash) {
 }
 
 TEST(Compat, StdFormat) {
-    auto s = std::format("{}", cn::i32{42});
+    const auto s = std::format("{}", cn::i32{42});
     EXPECT_EQ(s, "42");
 }
 
 TEST(Compat, StdFormatFloat) {
-    auto s = std::format("{}", cn::f64{2.5});
+    const auto s = std::format("{}", cn::f64{2.5});
     EXPECT_EQ(s, "2.5");
 }
 
 TEST(Compat, StdAccumulate) {
-    std::vector<cn::i32> v{cn::i32{1}, cn::i32{2}, cn::i32{3}};
-    auto sum = std::accumulate(v.begin(), v.end(), cn::i32{0});
+    const std::vector<cn::i32> v{cn::i32{1}, cn::i32{2}, cn::i32{3}};
+    const auto sum = std::accumulate(v.cbegin(), v.cend(), cn::i32{0});
     EXPECT_EQ(sum, cn::i32{6});
 }
 

@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include "crabnum.h"
 
 template<typename>
@@ -26,9 +27,9 @@ TYPED_TEST(IntSuite, ToStringBasic) {
 }
 
 TEST(Parse, ToStringFloat) {
-    auto s = cn::f64{3.14}.to_string();
+    const auto s = cn::f64{3.14}.to_string();
     EXPECT_FALSE(s.empty());
-    auto parsed = cn::f64::from_string(s);
+    const auto parsed = cn::f64::from_string(s);
     ASSERT_TRUE(parsed.has_value());
     EXPECT_EQ(parsed->value(), double{3.14});
 }
@@ -37,32 +38,32 @@ TEST(Parse, ToStringFloat) {
 
 TYPED_TEST(IntSuite, FromStringValid) {
     using T = TypeParam;
-    auto res = cn::Num<T>::from_string("42");
+    const auto res = cn::Num<T>::from_string("42");
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{42}});
 }
 
 TYPED_TEST(IntSuite, FromStringInvalid) {
     using T = TypeParam;
-    auto res = cn::Num<T>::from_string("abc");
+    const auto res = cn::Num<T>::from_string("abc");
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(IntSuite, FromStringTrailingChars) {
     using T = TypeParam;
-    auto res = cn::Num<T>::from_string("42abc");
+    const auto res = cn::Num<T>::from_string("42abc");
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(IntSuite, FromStringEmpty) {
     using T = TypeParam;
-    auto res = cn::Num<T>::from_string("");
+    const auto res = cn::Num<T>::from_string("");
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(FloatSuite, FromStringValid) {
     using T = TypeParam;
-    auto res = cn::Num<T>::from_string("2.5");
+    const auto res = cn::Num<T>::from_string("2.5");
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(res->value(), T{2.5});
 }
@@ -71,9 +72,9 @@ TYPED_TEST(FloatSuite, FromStringValid) {
 
 TYPED_TEST(IntSuite, ParsePartial) {
     using T = TypeParam;
-    auto res = cn::Num<T>::parse("42abc");
+    const auto res = cn::Num<T>::parse("42abc");
     ASSERT_TRUE(res.has_value());
-    auto [num, ptr] = *res;
+    const auto [num, ptr] = *res;
     EXPECT_EQ(num, cn::Num<T>{T{42}});
     EXPECT_EQ(std::string_view(ptr, 3), "abc");
 }
@@ -82,15 +83,15 @@ TYPED_TEST(IntSuite, ParsePartial) {
 
 TEST(Parse, WriteTo) {
     char buf[64]{};
-    cn::i32 a{12345};
-    auto res = a.write_to(buf, sizeof(buf));
+    const cn::i32 a{12345};
+    const auto res = a.write_to(buf, sizeof(buf));
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(std::string_view(buf, *res - buf), "12345");
 }
 
 TEST(Parse, WriteToSmallBuffer) {
     char buf[2]{};
-    cn::i32 a{12345};
-    auto res = a.write_to(buf, sizeof(buf));
+    const cn::i32 a{12345};
+    const auto res = a.write_to(buf, sizeof(buf));
     EXPECT_FALSE(res.has_value());
 }

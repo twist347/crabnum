@@ -51,7 +51,7 @@ TYPED_TEST(FloatSuite, Abs) {
 
 TYPED_TEST(AllNumSuite, MinMax) {
     using T = TypeParam;
-    cn::Num<T> a{T{3}}, b{T{7}};
+    const cn::Num<T> a{T{3}}, b{T{7}};
     EXPECT_EQ(a.min(b), a);
     EXPECT_EQ(a.max(b), b);
     EXPECT_EQ(b.min(a), a);
@@ -60,7 +60,7 @@ TYPED_TEST(AllNumSuite, MinMax) {
 
 TYPED_TEST(AllNumSuite, Clamp) {
     using T = TypeParam;
-    cn::Num<T> lo{T{2}}, hi{T{8}};
+    const cn::Num<T> lo{T{2}}, hi{T{8}};
     EXPECT_EQ(cn::Num<T>{T{5}}.clamp(lo, hi), cn::Num<T>{T{5}});
     EXPECT_EQ(cn::Num<T>{T{1}}.clamp(lo, hi), lo);
     EXPECT_EQ(cn::Num<T>{T{10}}.clamp(lo, hi), hi);
@@ -80,8 +80,8 @@ TYPED_TEST(FloatSuite, Cbrt) {
 
 TYPED_TEST(FloatSuite, ExpLog) {
     using T = TypeParam;
-    auto e = cn::consts::e<T>;
-    auto one = cn::Num<T>{T{1}};
+    const auto e = cn::consts::e<T>;
+    const auto one = cn::Num<T>{T{1}};
     EXPECT_EQ(one.exp().value(), static_cast<T>(std::exp(T{1})));
     EXPECT_EQ(e.log().value(), static_cast<T>(std::log(e.value())));
 }
@@ -105,7 +105,7 @@ TYPED_TEST(FloatSuite, Pow) {
 
 TYPED_TEST(FloatSuite, SinCosTan) {
     using T = TypeParam;
-    auto pi = cn::consts::pi<T>;
+    const auto pi = cn::consts::pi<T>;
     EXPECT_EQ(pi.sin().value(), static_cast<T>(std::sin(pi.value())));
     EXPECT_EQ(pi.cos().value(), static_cast<T>(std::cos(pi.value())));
     EXPECT_EQ(pi.tan().value(), static_cast<T>(std::tan(pi.value())));
@@ -113,7 +113,7 @@ TYPED_TEST(FloatSuite, SinCosTan) {
 
 TYPED_TEST(FloatSuite, AsinAcosAtan) {
     using T = TypeParam;
-    auto half = cn::Num<T>{T{0.5}};
+    const auto half = cn::Num<T>{T{0.5}};
     EXPECT_EQ(half.asin().value(), static_cast<T>(std::asin(T{0.5})));
     EXPECT_EQ(half.acos().value(), static_cast<T>(std::acos(T{0.5})));
     EXPECT_EQ(half.atan().value(), static_cast<T>(std::atan(T{0.5})));
@@ -121,14 +121,14 @@ TYPED_TEST(FloatSuite, AsinAcosAtan) {
 
 TYPED_TEST(FloatSuite, Atan2) {
     using T = TypeParam;
-    cn::Num<T> y{T{1}}, x{T{1}};
-    auto res = y.atan2(x);
+    const cn::Num<T> y{T{1}}, x{T{1}};
+    const auto res = y.atan2(x);
     EXPECT_EQ(res.value(), static_cast<T>(std::atan2(T{1}, T{1})));
 }
 
 TYPED_TEST(FloatSuite, Hypot) {
     using T = TypeParam;
-    cn::Num<T> a{T{3}}, b{T{4}};
+    const cn::Num<T> a{T{3}}, b{T{4}};
     EXPECT_EQ(a.hypot(b).value(), static_cast<T>(std::hypot(T{3}, T{4})));
 }
 
@@ -160,7 +160,7 @@ TYPED_TEST(FloatSuite, Trunc) {
 
 TYPED_TEST(FloatSuite, Fract) {
     using T = TypeParam;
-    auto val = cn::Num<T>{T{3.75}}.fract();
+    const auto val = cn::Num<T>{T{3.75}}.fract();
     EXPECT_EQ(val.value(), static_cast<T>(T{3.75} - std::trunc(T{3.75})));
 }
 

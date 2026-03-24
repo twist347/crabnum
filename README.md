@@ -1,5 +1,8 @@
 # crabnum
 
+[![CI](https://github.com/twist347/crabnum/actions/workflows/ci.yml/badge.svg)](https://github.com/twist347/crabnum/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Rust's numeric types in a single C++23 header.
 
 `Num<T>` is a zero-cost wrapper around primitive numeric types that brings Rust-style safety and API to C++: checked, saturating, wrapping, and overflowing arithmetic, safe casts, bitwise intrinsics, and more.
@@ -87,3 +90,7 @@ Header-only — copy `include/crabnum.h` into your project, or add via CMake:
 add_subdirectory(crabnum)
 target_link_libraries(your_target crabnum::crabnum)
 ```
+
+## License
+
+[MIT](LICENSE)

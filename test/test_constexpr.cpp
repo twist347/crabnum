@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include "crabnum.h"
 
 using namespace cn::literals;

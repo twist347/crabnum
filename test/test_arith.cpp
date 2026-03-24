@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include "crabnum.h"
 
 template<typename>
@@ -45,7 +46,7 @@ TYPED_TEST_SUITE(IntSuite, IntTypes);
 
 TYPED_TEST(SignedIntSuite, BasicArith) {
     using T = TypeParam;
-    const cn::Num<T> a{T{7}}, b{T{4}};
+    constexpr cn::Num<T> a{T{7}}, b{T{4}};
 
     EXPECT_EQ(a + b, cn::Num<T>{T{11}});
     EXPECT_EQ(a - b, cn::Num<T>{T{3}});
@@ -56,7 +57,7 @@ TYPED_TEST(SignedIntSuite, BasicArith) {
 
 TYPED_TEST(UnsignedIntSuite, BasicArith) {
     using T = TypeParam;
-    const cn::Num<T> a{T{7}}, b{T{4}};
+    constexpr cn::Num<T> a{T{7}}, b{T{4}};
 
     EXPECT_EQ(a + b, cn::Num<T>{T{11}});
     EXPECT_EQ(a - b, cn::Num<T>{T{3}});
@@ -67,7 +68,7 @@ TYPED_TEST(UnsignedIntSuite, BasicArith) {
 
 TYPED_TEST(FloatSuite, BasicArith) {
     using T = TypeParam;
-    const cn::Num<T> a{T{7}}, b{T{4}};
+    constexpr cn::Num<T> a{T{7}}, b{T{4}};
 
     EXPECT_EQ(a + b, cn::Num<T>{T{11}});
     EXPECT_EQ(a - b, cn::Num<T>{T{3}});
@@ -79,14 +80,14 @@ TYPED_TEST(FloatSuite, BasicArith) {
 
 TYPED_TEST(SignedIntSuite, UnaryMinus) {
     using T = TypeParam;
-    const cn::Num<T> a{T{5}};
+    constexpr cn::Num<T> a{T{5}};
     EXPECT_EQ(-a, cn::Num<T>{T{-5}});
     EXPECT_EQ(+a, a);
 }
 
 TYPED_TEST(FloatSuite, UnaryMinus) {
     using T = TypeParam;
-    cn::Num<T> a{T{2.5}};
+    const cn::Num<T> a{T{2.5}};
     EXPECT_EQ(-a, cn::Num<T>{T{-2.5}});
     EXPECT_EQ(+a, a);
 }
@@ -97,18 +98,18 @@ TYPED_TEST(AllNumSuite, IncrDecr) {
     using T = TypeParam;
     cn::Num<T> a{T{5}};
 
-    auto pre = ++a;
+    const auto pre = ++a;
     EXPECT_EQ(a, cn::Num<T>{T{6}});
     EXPECT_EQ(pre, cn::Num<T>{T{6}});
 
-    auto post = a++;
+    const auto post = a++;
     EXPECT_EQ(a, cn::Num<T>{T{7}});
     EXPECT_EQ(post, cn::Num<T>{T{6}});
 
     --a;
     EXPECT_EQ(a, cn::Num<T>{T{6}});
 
-    auto postd = a--;
+    const auto postd = a--;
     EXPECT_EQ(a, cn::Num<T>{T{5}});
     EXPECT_EQ(postd, cn::Num<T>{T{6}});
 }
@@ -143,7 +144,7 @@ TYPED_TEST(IntSuite, CompoundModulo) {
 
 TYPED_TEST(AllNumSuite, Comparison) {
     using T = TypeParam;
-    cn::Num<T> a{T{3}}, b{T{5}}, c{T{3}};
+    constexpr cn::Num<T> a{T{3}}, b{T{5}}, c{T{3}};
 
     EXPECT_TRUE(a == c);
     EXPECT_TRUE(a != b);
@@ -167,7 +168,7 @@ TYPED_TEST(AllNumSuite, Limits) {
 
 TYPED_TEST(AllNumSuite, ValueAndCast) {
     using T = TypeParam;
-    cn::Num<T> a{T{42}};
+    constexpr cn::Num<T> a{T{42}};
     EXPECT_EQ(a.value(), T{42});
     EXPECT_EQ(static_cast<T>(a), T{42});
 }
@@ -176,6 +177,6 @@ TYPED_TEST(AllNumSuite, ValueAndCast) {
 
 TYPED_TEST(AllNumSuite, DefaultConstruction) {
     using T = TypeParam;
-    cn::Num<T> a{};
+    constexpr cn::Num<T> a{};
     EXPECT_EQ(a.value(), T{0});
 }

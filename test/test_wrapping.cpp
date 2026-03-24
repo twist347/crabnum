@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include "crabnum.h"
 
 template<typename>
@@ -73,9 +74,9 @@ TYPED_TEST(IntSuite, WrappingMulNormal) {
 TYPED_TEST(UnsignedIntSuite, WrappingMulOverflow) {
     using T = TypeParam;
     // MAX * 2 wraps: MAX*2 = (2^N - 1)*2 = 2^(N+1) - 2 ≡ -2 mod 2^N ≡ MAX - 1
-    auto res = cn::Num<T>::MAX_VAL().wrapping_mul(cn::Num<T>{T{2}});
+    const auto res = cn::Num<T>::MAX_VAL().wrapping_mul(cn::Num<T>{T{2}});
     using U = std::make_unsigned_t<T>;
-    auto expected = static_cast<T>(static_cast<U>(std::numeric_limits<T>::max()) * U{2});
+    const auto expected = static_cast<T>(static_cast<U>(std::numeric_limits<T>::max()) * U{2});
     EXPECT_EQ(res, cn::Num<T>{expected});
 }
 

@@ -766,8 +766,7 @@ namespace cn {
             return ov ? std::nullopt : std::optional{res};
         }
 
-        [[nodiscard]] constexpr auto
-        checked_pow(std::uint32_t exp) const noexcept
+        [[nodiscard]] constexpr auto checked_pow(std::uint32_t exp) const noexcept
             -> std::optional<Num> requires Integral<T> {
             const auto [res, ov] = overflowing_pow(exp);
             return ov ? std::nullopt : std::optional{res};

@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
-#include "crabnum.h"
+
 #include <sstream>
+
+#include "crabnum.h"
 
 TEST(Stream, OutputInt) {
     std::ostringstream os;

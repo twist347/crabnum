@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include "crabnum.h"
 
 template<typename>
@@ -21,26 +22,26 @@ TYPED_TEST_SUITE(IntSuite, IntTypes);
 
 TYPED_TEST(IntSuite, BitwiseAnd) {
     using T = TypeParam;
-    cn::Num<T> a{T{0b1100}}, b{T{0b1010}};
-    EXPECT_EQ((a & b), cn::Num<T>{T{0b1000}});
+    constexpr cn::Num<T> a{T{0b1100}}, b{T{0b1010}};
+    EXPECT_EQ(a & b, cn::Num<T>{T{0b1000}});
 }
 
 TYPED_TEST(IntSuite, BitwiseOr) {
     using T = TypeParam;
-    cn::Num<T> a{T{0b1100}}, b{T{0b1010}};
-    EXPECT_EQ((a | b), cn::Num<T>{T{0b1110}});
+    constexpr cn::Num<T> a{T{0b1100}}, b{T{0b1010}};
+    EXPECT_EQ(a | b, cn::Num<T>{T{0b1110}});
 }
 
 TYPED_TEST(IntSuite, BitwiseXor) {
     using T = TypeParam;
-    cn::Num<T> a{T{0b1100}}, b{T{0b1010}};
-    EXPECT_EQ((a ^ b), cn::Num<T>{T{0b0110}});
+    constexpr cn::Num<T> a{T{0b1100}}, b{T{0b1010}};
+    EXPECT_EQ(a ^ b, cn::Num<T>{T{0b0110}});
 }
 
 TYPED_TEST(IntSuite, BitwiseNot) {
     using T = TypeParam;
-    cn::Num<T> a{T{0}};
-    EXPECT_EQ((~a), cn::Num<T>{static_cast<T>(~T{0})});
+    constexpr cn::Num<T> a{T{0}};
+    EXPECT_EQ(~a, cn::Num<T>{static_cast<T>(~T{0})});
 }
 
 TYPED_TEST(IntSuite, ShiftLeft) {
@@ -203,6 +204,6 @@ TEST(Bitwise, ReverseBitsMax) {
 }
 
 TEST(Bitwise, ReverseBitsDoubleReverse) {
-    cn::u32 val{0x12345678};
+    constexpr cn::u32 val{0x12345678};
     EXPECT_EQ(val.reverse_bits().reverse_bits(), val);
 }

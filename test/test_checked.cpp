@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include "crabnum.h"
 
 template<typename>
@@ -28,26 +29,26 @@ TYPED_TEST_SUITE(IntSuite, IntTypes);
 
 TYPED_TEST(IntSuite, CheckedAddNormal) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{3}}.checked_add(cn::Num<T>{T{4}});
+    const auto res = cn::Num<T>{T{3}}.checked_add(cn::Num<T>{T{4}});
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{7}});
 }
 
 TYPED_TEST(UnsignedIntSuite, CheckedAddOverflow) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MAX_VAL().checked_add(cn::Num<T>{T{1}});
+    const auto res = cn::Num<T>::MAX_VAL().checked_add(cn::Num<T>{T{1}});
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(SignedIntSuite, CheckedAddOverflowPositive) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MAX_VAL().checked_add(cn::Num<T>{T{1}});
+    const auto res = cn::Num<T>::MAX_VAL().checked_add(cn::Num<T>{T{1}});
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(SignedIntSuite, CheckedAddOverflowNegative) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MIN_VAL().checked_add(cn::Num<T>{T{-1}});
+    const auto res = cn::Num<T>::MIN_VAL().checked_add(cn::Num<T>{T{-1}});
     EXPECT_FALSE(res.has_value());
 }
 
@@ -55,20 +56,20 @@ TYPED_TEST(SignedIntSuite, CheckedAddOverflowNegative) {
 
 TYPED_TEST(IntSuite, CheckedSubNormal) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{10}}.checked_sub(cn::Num<T>{T{3}});
+    const auto res = cn::Num<T>{T{10}}.checked_sub(cn::Num<T>{T{3}});
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{7}});
 }
 
 TYPED_TEST(UnsignedIntSuite, CheckedSubUnderflow) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{0}}.checked_sub(cn::Num<T>{T{1}});
+    const auto res = cn::Num<T>{T{0}}.checked_sub(cn::Num<T>{T{1}});
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(SignedIntSuite, CheckedSubOverflow) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MIN_VAL().checked_sub(cn::Num<T>{T{1}});
+    const auto res = cn::Num<T>::MIN_VAL().checked_sub(cn::Num<T>{T{1}});
     EXPECT_FALSE(res.has_value());
 }
 
@@ -76,39 +77,39 @@ TYPED_TEST(SignedIntSuite, CheckedSubOverflow) {
 
 TYPED_TEST(IntSuite, CheckedMulNormal) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{3}}.checked_mul(cn::Num<T>{T{4}});
+    const auto res = cn::Num<T>{T{3}}.checked_mul(cn::Num<T>{T{4}});
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{12}});
 }
 
 TYPED_TEST(IntSuite, CheckedMulByZero) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MAX_VAL().checked_mul(cn::Num<T>{T{0}});
+    const auto res = cn::Num<T>::MAX_VAL().checked_mul(cn::Num<T>{T{0}});
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{0}});
 }
 
 TYPED_TEST(UnsignedIntSuite, CheckedMulOverflow) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MAX_VAL().checked_mul(cn::Num<T>{T{2}});
+    const auto res = cn::Num<T>::MAX_VAL().checked_mul(cn::Num<T>{T{2}});
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(SignedIntSuite, CheckedMulOverflow) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MAX_VAL().checked_mul(cn::Num<T>{T{2}});
+    const auto res = cn::Num<T>::MAX_VAL().checked_mul(cn::Num<T>{T{2}});
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(SignedIntSuite, CheckedMulMinByMinusOne) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MIN_VAL().checked_mul(cn::Num<T>{T{-1}});
+    const auto res = cn::Num<T>::MIN_VAL().checked_mul(cn::Num<T>{T{-1}});
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(SignedIntSuite, CheckedMulMinusOneByMin) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{-1}}.checked_mul(cn::Num<T>::MIN_VAL());
+    const auto res = cn::Num<T>{T{-1}}.checked_mul(cn::Num<T>::MIN_VAL());
     EXPECT_FALSE(res.has_value());
 }
 
@@ -116,20 +117,20 @@ TYPED_TEST(SignedIntSuite, CheckedMulMinusOneByMin) {
 
 TYPED_TEST(IntSuite, CheckedDivNormal) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{12}}.checked_div(cn::Num<T>{T{4}});
+    const auto res = cn::Num<T>{T{12}}.checked_div(cn::Num<T>{T{4}});
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{3}});
 }
 
 TYPED_TEST(IntSuite, CheckedDivByZero) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{5}}.checked_div(cn::Num<T>{T{0}});
+    const auto res = cn::Num<T>{T{5}}.checked_div(cn::Num<T>{T{0}});
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(SignedIntSuite, CheckedDivMinByMinusOne) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MIN_VAL().checked_div(cn::Num<T>{T{-1}});
+    const auto res = cn::Num<T>::MIN_VAL().checked_div(cn::Num<T>{T{-1}});
     EXPECT_FALSE(res.has_value());
 }
 
@@ -137,20 +138,20 @@ TYPED_TEST(SignedIntSuite, CheckedDivMinByMinusOne) {
 
 TYPED_TEST(IntSuite, CheckedRemNormal) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{10}}.checked_rem(cn::Num<T>{T{3}});
+    const auto res = cn::Num<T>{T{10}}.checked_rem(cn::Num<T>{T{3}});
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{1}});
 }
 
 TYPED_TEST(IntSuite, CheckedRemByZero) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{5}}.checked_rem(cn::Num<T>{T{0}});
+    const auto res = cn::Num<T>{T{5}}.checked_rem(cn::Num<T>{T{0}});
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(SignedIntSuite, CheckedRemMinByMinusOne) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MIN_VAL().checked_rem(cn::Num<T>{T{-1}});
+    const auto res = cn::Num<T>::MIN_VAL().checked_rem(cn::Num<T>{T{-1}});
     EXPECT_FALSE(res.has_value());
 }
 
@@ -158,21 +159,21 @@ TYPED_TEST(SignedIntSuite, CheckedRemMinByMinusOne) {
 
 TYPED_TEST(SignedIntSuite, CheckedNegNormal) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{5}}.checked_neg();
+    const auto res = cn::Num<T>{T{5}}.checked_neg();
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{-5}});
 }
 
 TYPED_TEST(SignedIntSuite, CheckedNegZero) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{0}}.checked_neg();
+    const auto res = cn::Num<T>{T{0}}.checked_neg();
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{0}});
 }
 
 TYPED_TEST(SignedIntSuite, CheckedNegMin) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MIN_VAL().checked_neg();
+    const auto res = cn::Num<T>::MIN_VAL().checked_neg();
     EXPECT_FALSE(res.has_value());
 }
 
@@ -180,21 +181,21 @@ TYPED_TEST(SignedIntSuite, CheckedNegMin) {
 
 TYPED_TEST(SignedIntSuite, CheckedAbsPositive) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{5}}.checked_abs();
+    const auto res = cn::Num<T>{T{5}}.checked_abs();
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{5}});
 }
 
 TYPED_TEST(SignedIntSuite, CheckedAbsNegative) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{-5}}.checked_abs();
+    const auto res = cn::Num<T>{T{-5}}.checked_abs();
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{5}});
 }
 
 TYPED_TEST(SignedIntSuite, CheckedAbsMin) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MIN_VAL().checked_abs();
+    const auto res = cn::Num<T>::MIN_VAL().checked_abs();
     EXPECT_FALSE(res.has_value());
 }
 
@@ -202,38 +203,38 @@ TYPED_TEST(SignedIntSuite, CheckedAbsMin) {
 
 TYPED_TEST(IntSuite, CheckedPowNormal) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{2}}.checked_pow(3);
+    const auto res = cn::Num<T>{T{2}}.checked_pow(3);
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{8}});
 }
 
 TYPED_TEST(IntSuite, CheckedPowZeroExp) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{5}}.checked_pow(0);
+    const auto res = cn::Num<T>{T{5}}.checked_pow(0);
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{1}});
 }
 
 TYPED_TEST(IntSuite, CheckedPowZeroBaseZeroExp) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{0}}.checked_pow(0);
+    const auto res = cn::Num<T>{T{0}}.checked_pow(0);
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{1}});
 }
 
 TYPED_TEST(IntSuite, CheckedPowOverflow) {
     using T = TypeParam;
-    auto res = cn::Num<T>::MAX_VAL().checked_pow(2);
+    const auto res = cn::Num<T>::MAX_VAL().checked_pow(2);
     EXPECT_FALSE(res.has_value());
 }
 
 TYPED_TEST(UnsignedIntSuite, CheckedPowBaseTwo) {
     using T = TypeParam;
     constexpr auto bits = sizeof(T) * 8u;
-    auto res = cn::Num<T>{T{2}}.checked_pow(bits - 1);
+    const auto res = cn::Num<T>{T{2}}.checked_pow(bits - 1);
     ASSERT_TRUE(res.has_value());
 
-    auto overflow = cn::Num<T>{T{2}}.checked_pow(bits);
+    const auto overflow = cn::Num<T>{T{2}}.checked_pow(bits);
     EXPECT_FALSE(overflow.has_value());
 }
 
@@ -241,14 +242,14 @@ TYPED_TEST(UnsignedIntSuite, CheckedPowBaseTwo) {
 
 TYPED_TEST(IntSuite, CheckedShlNormal) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{1}}.checked_shl(1);
+    const auto res = cn::Num<T>{T{1}}.checked_shl(1);
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{2}});
 }
 
 TYPED_TEST(IntSuite, CheckedShlZeroShift) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{5}}.checked_shl(0);
+    const auto res = cn::Num<T>{T{5}}.checked_shl(0);
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{5}});
 }
@@ -256,7 +257,7 @@ TYPED_TEST(IntSuite, CheckedShlZeroShift) {
 TYPED_TEST(IntSuite, CheckedShlTooMuch) {
     using T = TypeParam;
     constexpr auto bits = static_cast<std::uint32_t>(sizeof(T) * 8u);
-    auto res = cn::Num<T>{T{1}}.checked_shl(bits);
+    const auto res = cn::Num<T>{T{1}}.checked_shl(bits);
     EXPECT_FALSE(res.has_value());
 }
 
@@ -264,7 +265,7 @@ TYPED_TEST(IntSuite, CheckedShlTooMuch) {
 
 TYPED_TEST(IntSuite, CheckedShrNormal) {
     using T = TypeParam;
-    auto res = cn::Num<T>{T{8}}.checked_shr(2);
+    const auto res = cn::Num<T>{T{8}}.checked_shr(2);
     ASSERT_TRUE(res.has_value());
     EXPECT_EQ(*res, cn::Num<T>{T{2}});
 }
@@ -272,6 +273,6 @@ TYPED_TEST(IntSuite, CheckedShrNormal) {
 TYPED_TEST(IntSuite, CheckedShrTooMuch) {
     using T = TypeParam;
     constexpr auto bits = static_cast<std::uint32_t>(sizeof(T) * 8u);
-    auto res = cn::Num<T>{T{1}}.checked_shr(bits);
+    const auto res = cn::Num<T>{T{1}}.checked_shr(bits);
     EXPECT_FALSE(res.has_value());
 }
