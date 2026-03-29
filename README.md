@@ -64,7 +64,7 @@ Operations: `add`, `sub`, `mul`, `div`, `rem`, `neg`, `abs`, `pow`, `shl`, `shr`
 
 **Parsing:** `to_string`, `from_string`, `parse`, `write_to`
 
-**Compat:** `std::hash`, `std::format`, `std::ostream`/`std::istream`, `std::accumulate`, `std::sort`
+**Compat:** `std::hash`, `std::format`, `std::ostream`/`std::istream`
 
 ## Types
 

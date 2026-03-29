@@ -25,13 +25,13 @@ static_assert(sizeof(double) == 8, "double must be 64-bit");
 
 namespace cn {
     template<typename T>
-    concept Number = (std::integral<T> || std::floating_point<T>) && !std::same_as<T, bool>;
-
-    template<typename T>
     concept Integral = std::integral<T> && !std::same_as<T, bool>;
 
     template<typename T>
     concept Floating = std::floating_point<T>;
+
+    template<typename T>
+    concept Number = (Integral<T> || Floating<T>) && !std::same_as<T, bool>;
 
     template<Number T>
     class Num {
