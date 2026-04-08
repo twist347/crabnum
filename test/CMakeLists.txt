@@ -7,6 +7,7 @@ endfunction()
 
 crabnum_add_test(test_arith)
 crabnum_add_test(test_bitwise)
+crabnum_add_test(test_bytes)
 crabnum_add_test(test_cast)
 crabnum_add_test(test_checked)
 crabnum_add_test(test_compat)

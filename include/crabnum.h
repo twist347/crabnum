@@ -19,6 +19,7 @@
 #include <format>
 #include <numeric>
 #include <numbers>
+#include <functional>
 
 static_assert(sizeof(float) == 4, "float must be 32-bit");
 static_assert(sizeof(double) == 8, "double must be 64-bit");
@@ -31,7 +32,15 @@ namespace cn {
     concept Floating = std::floating_point<T>;
 
     template<typename T>
+    concept Signed = (std::signed_integral<T> || std::floating_point<T>) && !std::same_as<T, bool>;
+
+    template<typename T>
     concept Number = (Integral<T> || Floating<T>) && !std::same_as<T, bool>;
+
+    using Error = std::errc;
+
+    template<typename T>
+    using Result = std::expected<T, Error>;
 
     template<Number T>
     class Num {
@@ -129,7 +138,7 @@ namespace cn {
 
         [[nodiscard]] constexpr auto write_to(
             char *buf, std::size_t len
-        ) const noexcept -> std::expected<char *, std::errc> {
+        ) const noexcept -> Result<char *> {
             if constexpr (Integral<T>) {
                 const auto [ptr, ec] = std::to_chars(buf, buf + len, m_v);
                 if (ec != std::errc{}) {
@@ -153,9 +162,9 @@ namespace cn {
 
         [[nodiscard]] static constexpr auto parse(
             std::string_view sv
-        ) noexcept -> std::expected<std::pair<Num, const char *>, std::errc> {
+        ) noexcept -> Result<std::pair<Num, const char *> > {
             if (sv.empty()) {
-                return std::unexpected{std::errc::invalid_argument};
+                return std::unexpected{Error::invalid_argument};
             }
 
             T val{};
@@ -176,23 +185,23 @@ namespace cn {
             }
         }
 
-        [[nodiscard]] constexpr auto to_string() const -> std::string {
+        [[nodiscard]] auto to_string() const -> Result<std::string> {
             std::array<char, 64> buf{};
             const auto res = write_to(buf.data(), buf.size());
             if (!res) {
-                return std::string{};
+                return std::unexpected{res.error()};
             }
             return std::string(buf.data(), *res);
         }
 
-        [[nodiscard]] static constexpr auto from_string(std::string_view sv) noexcept -> std::expected<Num, std::errc> {
+        [[nodiscard]] static constexpr auto from_string(std::string_view sv) noexcept -> Result<Num> {
             const auto res = parse(sv);
             if (!res) {
                 return std::unexpected{res.error()};
             }
             const auto [num, ptr] = *res;
             if (ptr != sv.data() + sv.size()) {
-                return std::unexpected{std::errc::invalid_argument};
+                return std::unexpected{Error::invalid_argument};
             }
             return num;
         }
@@ -201,18 +210,73 @@ namespace cn {
 
         [[nodiscard]] static constexpr auto MIN_VAL() noexcept -> Num { return Num{std::numeric_limits<T>::lowest()}; }
         [[nodiscard]] static constexpr auto MAX_VAL() noexcept -> Num { return Num{std::numeric_limits<T>::max()}; }
-        [[nodiscard]] static constexpr auto EPS_VAL() noexcept -> Num { return Num{std::numeric_limits<T>::epsilon()}; }
 
-        [[nodiscard]] static constexpr auto INF_VAL() noexcept -> Num {
+        [[nodiscard]] static constexpr auto EPS_VAL() noexcept -> Num requires Floating<T> {
+            return Num{std::numeric_limits<T>::epsilon()};
+        }
+
+        [[nodiscard]] static constexpr auto INF_VAL() noexcept -> Num requires Floating<T> {
             return Num{std::numeric_limits<T>::infinity()};
         }
 
-        [[nodiscard]] static constexpr auto NAN_VAL() noexcept -> Num {
+        [[nodiscard]] static constexpr auto NAN_VAL() noexcept -> Num requires Floating<T> {
             return Num{std::numeric_limits<T>::quiet_NaN()};
+        }
+
+        /* ========== BYTES ========== */
+
+        using Bytes = std::array<std::uint8_t, sizeof(T)>;
+
+        [[nodiscard]] constexpr auto to_ne_bytes() const noexcept -> Bytes {
+            return std::bit_cast<Bytes>(m_v);
+        }
+
+        [[nodiscard]] constexpr auto to_le_bytes() const noexcept -> Bytes {
+            auto bytes = to_ne_bytes();
+            if constexpr (std::endian::native != std::endian::little) {
+                for (std::size_t i = 0, j = bytes.size() - 1; i < j; ++i, --j) {
+                    std::swap(bytes[i], bytes[j]);
+                }
+            }
+            return bytes;
+        }
+
+        [[nodiscard]] constexpr auto to_be_bytes() const noexcept -> Bytes {
+            auto bytes = to_ne_bytes();
+            if constexpr (std::endian::native != std::endian::big) {
+                for (std::size_t i = 0, j = bytes.size() - 1; i < j; ++i, --j) {
+                    std::swap(bytes[i], bytes[j]);
+                }
+            }
+            return bytes;
+        }
+
+        [[nodiscard]] static constexpr auto from_ne_bytes(Bytes bytes) noexcept -> Num {
+            return Num{std::bit_cast<T>(bytes)};
+        }
+
+        [[nodiscard]] static constexpr auto from_le_bytes(Bytes bytes) noexcept -> Num {
+            if constexpr (std::endian::native != std::endian::little) {
+                for (std::size_t i = 0, j = bytes.size() - 1; i < j; ++i, --j) {
+                    std::swap(bytes[i], bytes[j]);
+                }
+            }
+            return from_ne_bytes(bytes);
+        }
+
+        [[nodiscard]] static constexpr auto from_be_bytes(Bytes bytes) noexcept -> Num {
+            if constexpr (std::endian::native != std::endian::big) {
+                for (std::size_t i = 0, j = bytes.size() - 1; i < j; ++i, --j) {
+                    std::swap(bytes[i], bytes[j]);
+                }
+            }
+            return from_ne_bytes(bytes);
         }
 
         /* ========== COMMON MATH ========== */
 
+        // Note: for signed integers, abs(MIN_VAL) wraps and returns MIN_VAL
+        // (two's-complement quirk). Use checked_abs/overflowing_abs for a safe variant.
         [[nodiscard]] constexpr auto abs() const noexcept -> Num {
             if constexpr (std::unsigned_integral<T>) {
                 return *this;
@@ -257,6 +321,8 @@ namespace cn {
             return this->max(lo).min(hi);
         }
 
+        // Precondition: no signed MIN_VAL operand; lcm result must fit in T.
+        // Use checked_gcd / checked_lcm for a safe variant.
         [[nodiscard]] constexpr auto gcd(Num other) const noexcept -> Num requires Integral<T> {
             return Num{static_cast<T>(std::gcd(m_v, other.m_v))};
         }
@@ -348,7 +414,7 @@ namespace cn {
         }
 
         template<Floating U>
-        [[nodiscard]] constexpr auto hypot(Num<U> x) const -> Num<std::common_type_t<T, U> > {
+        [[nodiscard]] constexpr auto hypot(Num<U> x) const -> Num<std::common_type_t<T, U> > requires Floating<T> {
             using R = std::common_type_t<T, U>;
             return Num<R>{static_cast<R>(std::hypot(this->as_raw<R>(), x.template as_raw<R>()))};
         }
@@ -495,7 +561,10 @@ namespace cn {
 
         [[nodiscard]] constexpr auto operator+() const noexcept -> Num { return *this; }
 
-        [[nodiscard]] constexpr auto operator-() const noexcept -> Num {
+        // Unary minus is forbidden on unsigned types (matches Rust). Use
+        // wrapping_neg / checked_neg / overflowing_neg for explicit semantics.
+        // Note: on signed MIN_VAL this wraps to MIN_VAL itself.
+        [[nodiscard]] constexpr auto operator-() const noexcept -> Num requires Signed<T> {
             if constexpr (std::signed_integral<T>) {
                 // unsigned negate to avoid UB on MIN_VAL
                 using U = std::make_unsigned_t<T>;
@@ -507,6 +576,8 @@ namespace cn {
 
         /* ========== INCR/DECR ========== */
 
+        // Note: ++/-- wrap silently on overflow. Use checked_add/checked_sub
+        // if overflow detection is needed.
         constexpr auto operator++() noexcept -> Num & {
             ++m_v;
             return *this;
@@ -611,9 +682,6 @@ namespace cn {
 
         [[nodiscard]] constexpr auto trailing_zeros() const noexcept
             -> std::uint32_t requires Integral<T> {
-            if (m_v == T{0}) {
-                return static_cast<std::uint32_t>(sizeof(T) * 8u);
-            }
             return static_cast<std::uint32_t>(std::countr_zero(static_cast<std::make_unsigned_t<T>>(m_v)));
         }
 
@@ -692,6 +760,7 @@ namespace cn {
             return {Num{wrapped}, wrapped / m_v != rhs.m_v};
         }
 
+        // Precondition: rhs != 0 (UB otherwise). Use checked_div for a zero-safe variant.
         [[nodiscard]] constexpr auto overflowing_div(Num rhs) const noexcept
             -> std::pair<Num, bool> requires Integral<T> {
             if constexpr (std::signed_integral<T>) {
@@ -702,6 +771,7 @@ namespace cn {
             return {Num{static_cast<T>(m_v / rhs.m_v)}, false};
         }
 
+        // Precondition: rhs != 0 (UB otherwise). Use checked_rem for a zero-safe variant.
         [[nodiscard]] constexpr auto overflowing_rem(Num rhs) const noexcept
             -> std::pair<Num, bool> requires Integral<T> {
             if constexpr (std::signed_integral<T>) {
@@ -869,6 +939,58 @@ namespace cn {
             -> std::optional<Num> requires Integral<T> {
             const auto [res, ov] = overflowing_pow(exp);
             return ov ? std::nullopt : std::optional{res};
+        }
+
+        [[nodiscard]] constexpr auto checked_gcd(Num other) const noexcept
+            -> std::optional<Num> requires Integral<T> {
+            using U = std::make_unsigned_t<T>;
+            constexpr auto abs_u = [](T v) -> U {
+                if constexpr (std::signed_integral<T>) {
+                    return v < T{0}
+                               ? static_cast<U>(static_cast<U>(0) - static_cast<U>(v))
+                               : static_cast<U>(v);
+                } else {
+                    return v;
+                }
+            };
+            const U g = std::gcd(abs_u(m_v), abs_u(other.m_v));
+            if constexpr (std::signed_integral<T>) {
+                if (g > static_cast<U>(std::numeric_limits<T>::max())) {
+                    return std::nullopt;
+                }
+            }
+            return Num{static_cast<T>(g)};
+        }
+
+        [[nodiscard]] constexpr auto checked_lcm(Num other) const noexcept
+            -> std::optional<Num> requires Integral<T> {
+            if (m_v == T{0} || other.m_v == T{0}) {
+                return Num{T{0}};
+            }
+            using U = std::make_unsigned_t<T>;
+            constexpr auto abs_u = [](T v) -> U {
+                if constexpr (std::signed_integral<T>) {
+                    return v < T{0}
+                               ? static_cast<U>(static_cast<U>(0) - static_cast<U>(v))
+                               : static_cast<U>(v);
+                } else {
+                    return v;
+                }
+            };
+            const U a = abs_u(m_v);
+            const U b = abs_u(other.m_v);
+            const U g = std::gcd(a, b);
+            const U a_div = static_cast<U>(a / g);
+            if (b > std::numeric_limits<U>::max() / a_div) {
+                return std::nullopt;
+            }
+            const U result = static_cast<U>(a_div * b);
+            if constexpr (std::signed_integral<T>) {
+                if (result > static_cast<U>(std::numeric_limits<T>::max())) {
+                    return std::nullopt;
+                }
+            }
+            return Num{static_cast<T>(result)};
         }
 
         [[nodiscard]] constexpr auto checked_shl(std::uint32_t shift) const noexcept
@@ -1062,24 +1184,23 @@ namespace cn {
 
     template<Number T>
     auto operator>>(std::istream &is, Num<T> &x) -> std::istream & {
-        std::array<char, 64> buf{};
         is >> std::ws;
-
-        std::size_t len = 0;
-        while (len < buf.size() - 1) {
-            if (const auto ch = is.peek(); ch == std::istream::traits_type::eof() || std::isspace(ch)) {
+        std::string buf;
+        while (true) {
+            const auto ch = is.peek();
+            if (ch == std::istream::traits_type::eof() || std::isspace(ch)) {
                 break;
             }
-            buf[len++] = static_cast<char>(is.get());
+            buf.push_back(static_cast<char>(is.get()));
         }
 
-        auto res = Num<T>::parse(std::string_view{buf.data(), len});
+        auto res = Num<T>::parse(std::string_view{buf});
         if (!res) {
             is.setstate(std::ios::failbit);
             return is;
         }
         auto [num, ptr] = *res;
-        if (ptr != buf.data() + len) {
+        if (ptr != buf.data() + buf.size()) {
             is.setstate(std::ios::failbit);
             return is;
         }

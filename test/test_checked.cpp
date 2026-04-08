@@ -276,3 +276,63 @@ TYPED_TEST(IntSuite, CheckedShrTooMuch) {
     const auto res = cn::Num<T>{T{1}}.checked_shr(bits);
     EXPECT_FALSE(res.has_value());
 }
+
+// --- checked_gcd ---
+
+TYPED_TEST(IntSuite, CheckedGcdNormal) {
+    using T = TypeParam;
+    const auto res = cn::Num<T>{T{12}}.checked_gcd(cn::Num<T>{T{18}});
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(*res, cn::Num<T>{T{6}});
+}
+
+TYPED_TEST(IntSuite, CheckedGcdWithZero) {
+    using T = TypeParam;
+    const auto res = cn::Num<T>{T{0}}.checked_gcd(cn::Num<T>{T{7}});
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(*res, cn::Num<T>{T{7}});
+}
+
+TYPED_TEST(SignedIntSuite, CheckedGcdSignedMinSafe) {
+    using T = TypeParam;
+    // gcd(MIN, even) fits — e.g. gcd(MIN, 2) == 2
+    const auto res = cn::Num<T>::MIN_VAL().checked_gcd(cn::Num<T>{T{2}});
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(*res, cn::Num<T>{T{2}});
+}
+
+TYPED_TEST(SignedIntSuite, CheckedGcdSignedMinOverflow) {
+    using T = TypeParam;
+    // gcd(MIN, 0) == |MIN|, doesn't fit in signed T
+    const auto res = cn::Num<T>::MIN_VAL().checked_gcd(cn::Num<T>{T{0}});
+    EXPECT_FALSE(res.has_value());
+}
+
+// --- checked_lcm ---
+
+TYPED_TEST(IntSuite, CheckedLcmNormal) {
+    using T = TypeParam;
+    const auto res = cn::Num<T>{T{4}}.checked_lcm(cn::Num<T>{T{6}});
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(*res, cn::Num<T>{T{12}});
+}
+
+TYPED_TEST(IntSuite, CheckedLcmWithZero) {
+    using T = TypeParam;
+    const auto res = cn::Num<T>{T{0}}.checked_lcm(cn::Num<T>{T{7}});
+    ASSERT_TRUE(res.has_value());
+    EXPECT_EQ(*res, cn::Num<T>{T{0}});
+}
+
+TYPED_TEST(IntSuite, CheckedLcmOverflow) {
+    using T = TypeParam;
+    const auto res = cn::Num<T>::MAX_VAL().checked_lcm(cn::Num<T>{T{cn::Num<T>::MAX_VAL().value() - T{1}}});
+    EXPECT_FALSE(res.has_value());
+}
+
+TYPED_TEST(SignedIntSuite, CheckedLcmSignedMin) {
+    using T = TypeParam;
+    // lcm(MIN, anything != 0) overflows since |MIN| already doesn't fit signed
+    const auto res = cn::Num<T>::MIN_VAL().checked_lcm(cn::Num<T>{T{1}});
+    EXPECT_FALSE(res.has_value());
+}

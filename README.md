@@ -45,7 +45,9 @@ auto [res, ov] = cn::i32::MAX_VAL().overflowing_add(1_i32);  // {MIN_VAL(), true
 - `wrapping_*` → modular arithmetic, defined behavior for signed
 - `overflowing_*` → `std::pair<Num, bool>` — wrapping result + overflow flag
 
-Operations: `add`, `sub`, `mul`, `div`, `rem`, `neg`, `abs`, `pow`, `shl`, `shr`
+Operations: `add`, `sub`, `mul`, `div`, `rem`, `neg`, `abs`, `pow`, `shl`, `shr`, `gcd`, `lcm`
+
+> Unary `-` is rejected on unsigned types at compile time (matches Rust). Use `wrapping_neg` / `checked_neg` / `overflowing_neg` for explicit semantics.
 
 **Casts:**
 - `as<Num<U>>()` — unchecked cast
@@ -53,6 +55,8 @@ Operations: `add`, `sub`, `mul`, `div`, `rem`, `neg`, `abs`, `pow`, `shl`, `shr`
 - `saturating_as<U>()` — clamps to target range
 
 **Bitwise:** `&`, `|`, `^`, `~`, `<<`, `>>`, `count_ones`, `count_zeros`, `leading_zeros`, `trailing_zeros`, `leading_ones`, `trailing_ones`, `rotate_left`, `rotate_right`, `reverse_bits`
+
+**Bytes:** `to_be_bytes`, `to_le_bytes`, `to_ne_bytes`, `from_be_bytes`, `from_le_bytes`, `from_ne_bytes` — fixed-size byte serialization for both integers and floats
 
 **Math:** `abs`, `min`, `max`, `abs_diff`, `clamp`, `gcd`, `lcm`, `midpoint`, `sqrt`, `cbrt`, `pow`, `exp`, `exp2`, `expm1`, `log`, `log2`, `log10`, `log1p`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `hypot`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `erf`, `erfc`, `tgamma`, `lgamma`, `copysign`, `fmod`, `remainder`, `fma`, `nextafter`, `to_degrees`, `to_radians`, `floor`, `ceil`, `round`, `trunc`, `fract`
 
@@ -62,7 +66,7 @@ Operations: `add`, `sub`, `mul`, `div`, `rem`, `neg`, `abs`, `pow`, `shl`, `shr`
 
 **Concepts:** `IsNum`, `IsIntNum`, `IsSignedNum`, `IsUnsignedNum`, `IsFloatNum`
 
-**Parsing:** `to_string`, `from_string`, `parse`, `write_to`
+**Parsing:** `to_string`, `from_string`, `parse`, `write_to` — all return `cn::Result<T>` (alias for `std::expected<T, cn::Error>`)
 
 **Compat:** `std::hash`, `std::format`, `std::ostream`/`std::istream`
 
