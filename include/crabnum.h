@@ -12,6 +12,7 @@
 #include <concepts>
 #include <cstdint>
 #include <cstddef>
+#include <cctype>
 #include <string>
 #include <array>
 #include <bit>
@@ -43,6 +44,36 @@ namespace cn {
     using Result = std::expected<T, Error>;
 
     template<Number T>
+    class Num;
+
+    /* ========== NUM CONCEPTS ========== */
+
+    namespace detail {
+        template<typename T>
+        struct is_num : std::false_type {
+        };
+
+        template<Number T>
+        struct is_num<Num<T> > : std::true_type {
+        };
+    }
+
+    template<typename T>
+    concept IsNum = detail::is_num<std::remove_cv_t<T> >::value;
+
+    template<typename T>
+    concept IsIntNum = IsNum<T> && Integral<typename T::value_type>;
+
+    template<typename T>
+    concept IsSignedNum = IsNum<T> && std::signed_integral<typename T::value_type>;
+
+    template<typename T>
+    concept IsUnsignedNum = IsNum<T> && std::unsigned_integral<typename T::value_type>;
+
+    template<typename T>
+    concept IsFloatNum = IsNum<T> && Floating<typename T::value_type>;
+
+    template<Number T>
     class Num {
     public:
         using value_type = T;
@@ -63,10 +94,13 @@ namespace cn {
             return static_cast<U>(m_v);
         }
 
-        template<typename U>
-        [[nodiscard]] constexpr auto as() const noexcept -> std::remove_cvref_t<U> {
-            using Out = std::remove_cvref_t<U>;
-            return Out{static_cast<Out::value_type>(m_v)};
+        // Unchecked cast between Num types: wraps a plain static_cast, so
+        // narrowing truncates and out-of-range float -> int is UB, exactly as
+        // it would be on the underlying primitives. Use try_as / saturating_as
+        // when the value may not fit.
+        template<IsNum U>
+        [[nodiscard]] constexpr auto as() const noexcept -> U {
+            return U{static_cast<typename U::value_type>(m_v)};
         }
 
         // Returns nullopt if the value cannot be represented exactly in U.
@@ -136,6 +170,12 @@ namespace cn {
             }
         }
 
+        // Writes the shortest round-trippable representation into [buf, buf + len).
+        //
+        // NOTE: constant evaluation works for integral T only. std::to_chars is
+        // constexpr for integral types since C++23 (P2291), but its floating-point
+        // overloads are not, so Num<float>/Num<double>::write_to can only be called
+        // at run time. Same applies to parse / to_string / from_string below.
         [[nodiscard]] constexpr auto write_to(
             char *buf, std::size_t len
         ) const noexcept -> Result<char *> {
@@ -160,6 +200,8 @@ namespace cn {
             }
         }
 
+        // Parses a leading number and reports where parsing stopped.
+        // Integral T only in constant expressions (see write_to).
         [[nodiscard]] static constexpr auto parse(
             std::string_view sv
         ) noexcept -> Result<std::pair<Num, const char *> > {
@@ -194,6 +236,8 @@ namespace cn {
             return std::string(buf.data(), *res);
         }
 
+        // Like parse, but requires the whole string to be consumed.
+        // Integral T only in constant expressions (see write_to).
         [[nodiscard]] static constexpr auto from_string(std::string_view sv) noexcept -> Result<Num> {
             const auto res = parse(sv);
             if (!res) {
@@ -208,8 +252,17 @@ namespace cn {
 
         /* ========== LIMITS ========== */
 
+        // NOTE: MIN_VAL() follows Rust's `T::MIN`, i.e. the most negative value.
+        // For floating-point T that is std::numeric_limits<T>::lowest(), NOT
+        // std::numeric_limits<T>::min() -- see MIN_POSITIVE_VAL() for the latter.
         [[nodiscard]] static constexpr auto MIN_VAL() noexcept -> Num { return Num{std::numeric_limits<T>::lowest()}; }
         [[nodiscard]] static constexpr auto MAX_VAL() noexcept -> Num { return Num{std::numeric_limits<T>::max()}; }
+
+        // Smallest positive normal value (Rust's `f64::MIN_POSITIVE`,
+        // C++'s std::numeric_limits<T>::min()).
+        [[nodiscard]] static constexpr auto MIN_POSITIVE_VAL() noexcept -> Num requires Floating<T> {
+            return Num{std::numeric_limits<T>::min()};
+        }
 
         [[nodiscard]] static constexpr auto EPS_VAL() noexcept -> Num requires Floating<T> {
             return Num{std::numeric_limits<T>::epsilon()};
@@ -1088,23 +1141,6 @@ namespace cn {
         T m_v{};
     };
 
-    /* ========== NUM CONCEPTS ========== */
-
-    template<typename T>
-    concept IsNum = requires { typename T::value_type; } && std::same_as<T, Num<typename T::value_type> >;
-
-    template<typename T>
-    concept IsIntNum = IsNum<T> && Integral<typename T::value_type>;
-
-    template<typename T>
-    concept IsSignedNum = IsNum<T> && std::signed_integral<typename T::value_type>;
-
-    template<typename T>
-    concept IsUnsignedNum = IsNum<T> && std::unsigned_integral<typename T::value_type>;
-
-    template<typename T>
-    concept IsFloatNum = IsNum<T> && Floating<typename T::value_type>;
-
     /* ========== Num op Num ========== */
 
     template<Number T>
@@ -1171,39 +1207,53 @@ namespace cn {
 
     /* ========== STREAMS ========== */
 
+    // Forwards to the built-in inserter so that the stream's formatting state
+    // (width, fill, adjustfield, basefield, precision, showpos, ...) applies,
+    // just like it does for the underlying primitive.
     template<Number T>
     auto operator<<(std::ostream &os, const Num<T> &x) -> std::ostream & {
-        std::array<char, 64> buf{};
-        if (auto res = x.write_to(buf.data(), buf.size())) {
-            os.write(buf.data(), res.value() - buf.data());
+        if constexpr (Integral<T> && sizeof(T) == 1) {
+            // char-sized integers would otherwise be inserted as characters
+            using Promoted = std::conditional_t<std::is_signed_v<T>, int, unsigned>;
+            return os << static_cast<Promoted>(x.value());
         } else {
-            os.setstate(std::ios::failbit);
+            return os << x.value();
         }
-        return os;
     }
 
     template<Number T>
     auto operator>>(std::istream &is, Num<T> &x) -> std::istream & {
-        is >> std::ws;
+        // sentry honours skipws and refuses to extract from a failed stream
+        const std::istream::sentry guard{is};
+        if (!guard) {
+            return is;
+        }
+
         std::string buf;
-        while (true) {
-            const auto ch = is.peek();
-            if (ch == std::istream::traits_type::eof() || std::isspace(ch)) {
-                break;
-            }
+        for (auto ch = is.peek();
+             ch != std::istream::traits_type::eof() && !std::isspace(static_cast<unsigned char>(ch));
+             ch = is.peek()) {
             buf.push_back(static_cast<char>(is.get()));
         }
 
-        auto res = Num<T>::parse(std::string_view{buf});
+        const auto res = Num<T>::parse(std::string_view{buf});
         if (!res) {
             is.setstate(std::ios::failbit);
             return is;
         }
-        auto [num, ptr] = *res;
-        if (ptr != buf.data() + buf.size()) {
-            is.setstate(std::ios::failbit);
-            return is;
+
+        // Put back whatever the parser did not consume, so that extraction
+        // stops at the end of the number like the built-in extractors do:
+        // reading "12abc" yields 12 and leaves "abc" in the stream.
+        const auto [num, ptr] = *res;
+        for (const char *p = buf.data() + buf.size(); p != ptr;) {
+            --p;
+            is.putback(*p);
+            if (!is) {
+                return is;
+            }
         }
+
         x = num;
         return is;
     }
@@ -1234,6 +1284,48 @@ struct std::hash<cn::Num<T> > {
     constexpr std::size_t operator()(cn::Num<T> n) const noexcept {
         return std::hash<T>{}(n.value());
     }
+};
+
+/* ========== std::numeric_limits ========== */
+
+template<cn::Number T>
+struct std::numeric_limits<cn::Num<T> > {
+private:
+    using base = std::numeric_limits<T>;
+    using num = cn::Num<T>;
+
+public:
+    static constexpr bool is_specialized = true;
+    static constexpr bool is_signed = base::is_signed;
+    static constexpr bool is_integer = base::is_integer;
+    static constexpr bool is_exact = base::is_exact;
+    static constexpr bool has_infinity = base::has_infinity;
+    static constexpr bool has_quiet_NaN = base::has_quiet_NaN;
+    static constexpr bool has_signaling_NaN = base::has_signaling_NaN;
+    static constexpr bool is_iec559 = base::is_iec559;
+    static constexpr bool is_bounded = base::is_bounded;
+    static constexpr bool is_modulo = base::is_modulo;
+    static constexpr bool traps = base::traps;
+    static constexpr bool tinyness_before = base::tinyness_before;
+    static constexpr std::float_round_style round_style = base::round_style;
+    static constexpr int digits = base::digits;
+    static constexpr int digits10 = base::digits10;
+    static constexpr int max_digits10 = base::max_digits10;
+    static constexpr int radix = base::radix;
+    static constexpr int min_exponent = base::min_exponent;
+    static constexpr int min_exponent10 = base::min_exponent10;
+    static constexpr int max_exponent = base::max_exponent;
+    static constexpr int max_exponent10 = base::max_exponent10;
+
+    static constexpr auto min() noexcept -> num { return num{base::min()}; }
+    static constexpr auto lowest() noexcept -> num { return num{base::lowest()}; }
+    static constexpr auto max() noexcept -> num { return num{base::max()}; }
+    static constexpr auto epsilon() noexcept -> num { return num{base::epsilon()}; }
+    static constexpr auto round_error() noexcept -> num { return num{base::round_error()}; }
+    static constexpr auto infinity() noexcept -> num { return num{base::infinity()}; }
+    static constexpr auto quiet_NaN() noexcept -> num { return num{base::quiet_NaN()}; }
+    static constexpr auto signaling_NaN() noexcept -> num { return num{base::signaling_NaN()}; }
+    static constexpr auto denorm_min() noexcept -> num { return num{base::denorm_min()}; }
 };
 
 /* ========== std::formatter ========== */
@@ -1271,45 +1363,45 @@ namespace cn::literals {
 /* ========== CONSTS ========== */
 
 namespace cn::consts {
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> e{std::numbers::e_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> log2e{std::numbers::log2e_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> log10e{std::numbers::log10e_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> pi{std::numbers::pi_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> inv_pi{std::numbers::inv_pi_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> inv_sqrtpi{std::numbers::inv_sqrtpi_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> ln2{std::numbers::ln2_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> ln10{std::numbers::ln10_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> sqrt2{std::numbers::sqrt2_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> sqrt3{std::numbers::sqrt3_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> inv_sqrt3{std::numbers::inv_sqrt3_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> egamma{std::numbers::egamma_v<T>};
 
-    template<typename T>
+    template<Floating T>
     inline constexpr Num<T> phi{std::numbers::phi_v<T>};
 
-    template<typename T>
-    inline constexpr Num<T> tau{std::numbers::pi_v<T> * Num<T>{2}};
+    template<Floating T>
+    inline constexpr Num<T> tau{T{2} * std::numbers::pi_v<T>};
 }

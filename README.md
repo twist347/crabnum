@@ -62,13 +62,19 @@ Operations: `add`, `sub`, `mul`, `div`, `rem`, `neg`, `abs`, `pow`, `shl`, `shr`
 
 **Predicates:** `is_nan`, `is_finite`, `is_inf`, `is_positive`, `is_negative`, `signum`
 
-**Constants:** `MIN_VAL()`, `MAX_VAL()`, `EPS_VAL()`, `INF_VAL()`, `NAN_VAL()`
+**Constants:** `MIN_VAL()`, `MAX_VAL()`, `EPS_VAL()`, `INF_VAL()`, `NAN_VAL()`, `MIN_POSITIVE_VAL()`
+
+> `MIN_VAL()` follows Rust's `T::MIN` — the *most negative* value, i.e. `std::numeric_limits<T>::lowest()`. For floats, the smallest positive normal (C++'s `numeric_limits<T>::min()`, Rust's `f64::MIN_POSITIVE`) is `MIN_POSITIVE_VAL()`.
 
 **Concepts:** `IsNum`, `IsIntNum`, `IsSignedNum`, `IsUnsignedNum`, `IsFloatNum`
 
 **Parsing:** `to_string`, `from_string`, `parse`, `write_to` — all return `cn::Result<T>` (alias for `std::expected<T, cn::Error>`)
 
-**Compat:** `std::hash`, `std::format`, `std::ostream`/`std::istream`
+> Usable in constant expressions for integral types only: `std::to_chars`/`from_chars` became `constexpr` for integers in C++23 (P2291), but their floating-point overloads did not. `cn::f64::from_string` is run-time only.
+
+**Compat:** `std::hash`, `std::format`, `std::numeric_limits`, `std::ostream`/`std::istream`
+
+> `std::numeric_limits<cn::Num<T>>` is specialized and returns `Num<T>`, so generic numeric code works unchanged. Stream insertion honours the stream's formatting state (`std::hex`, `setw`, `setprecision`, …); extraction stops at the end of the number, so `"12abc"` yields `12` and leaves `abc` in the stream.
 
 ## Types
 

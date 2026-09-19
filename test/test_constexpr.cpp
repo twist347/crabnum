@@ -93,6 +93,24 @@ static_assert(cn::i32{2}.checked_pow(10).value() == cn::i32{1024});
 static_assert(cn::u8{2}.saturating_pow(8) == cn::u8::MAX_VAL());
 static_assert(cn::u8{2}.wrapping_pow(8) == cn::u8{0});
 
+// constants (variable templates -- only compiled when used)
+static_assert(cn::consts::tau<double>.value() == 2.0 * std::numbers::pi_v<double>);
+static_assert(cn::consts::pi<float>.value() == std::numbers::pi_v<float>);
+
+// numeric_limits
+static_assert(std::numeric_limits<cn::i32>::max() == cn::i32::MAX_VAL());
+static_assert(std::numeric_limits<cn::i32>::lowest() == cn::i32::MIN_VAL());
+static_assert(std::numeric_limits<cn::u8>::max() == cn::u8{255});
+static_assert(std::numeric_limits<cn::f64>::lowest() == cn::f64::MIN_VAL());
+static_assert(std::numeric_limits<cn::f64>::min() == cn::f64::MIN_POSITIVE_VAL());
+static_assert(cn::f64::MIN_POSITIVE_VAL().value() > 0.0);
+
+// parse / from_string are constexpr for integral T (P2291); the float
+// overloads of std::from_chars are not constexpr, so Num<double>::from_string
+// is run-time only -- see the note on write_to in crabnum.h
+static_assert(cn::i32::from_string("15").value() == cn::i32{15});
+static_assert(!cn::i32::from_string("15x").has_value());
+
 // gtest needs at least one test to run
 TEST(Constexpr, CompileTimeChecksPass) {
     SUCCEED();

@@ -405,3 +405,46 @@ TYPED_TEST(FloatSuite, AbsDiffFloat) {
     const auto res = cn::Num<T>{T{-2.5}}.abs_diff(cn::Num<T>{T{1.5}});
     EXPECT_EQ(res.value(), T{4});
 }
+
+// --- constants ---
+// Every entry of cn::consts is instantiated here: they are variable templates,
+// so an unused one is never compiled (this is how the broken `tau` slipped through).
+
+TYPED_TEST(FloatSuite, ConstsMatchStdNumbers) {
+    using T = TypeParam;
+    EXPECT_EQ(cn::consts::e<T>.value(), std::numbers::e_v<T>);
+    EXPECT_EQ(cn::consts::log2e<T>.value(), std::numbers::log2e_v<T>);
+    EXPECT_EQ(cn::consts::log10e<T>.value(), std::numbers::log10e_v<T>);
+    EXPECT_EQ(cn::consts::pi<T>.value(), std::numbers::pi_v<T>);
+    EXPECT_EQ(cn::consts::inv_pi<T>.value(), std::numbers::inv_pi_v<T>);
+    EXPECT_EQ(cn::consts::inv_sqrtpi<T>.value(), std::numbers::inv_sqrtpi_v<T>);
+    EXPECT_EQ(cn::consts::ln2<T>.value(), std::numbers::ln2_v<T>);
+    EXPECT_EQ(cn::consts::ln10<T>.value(), std::numbers::ln10_v<T>);
+    EXPECT_EQ(cn::consts::sqrt2<T>.value(), std::numbers::sqrt2_v<T>);
+    EXPECT_EQ(cn::consts::sqrt3<T>.value(), std::numbers::sqrt3_v<T>);
+    EXPECT_EQ(cn::consts::inv_sqrt3<T>.value(), std::numbers::inv_sqrt3_v<T>);
+    EXPECT_EQ(cn::consts::egamma<T>.value(), std::numbers::egamma_v<T>);
+    EXPECT_EQ(cn::consts::phi<T>.value(), std::numbers::phi_v<T>);
+}
+
+TYPED_TEST(FloatSuite, ConstsTau) {
+    using T = TypeParam;
+    EXPECT_EQ(cn::consts::tau<T>.value(), T{2} * std::numbers::pi_v<T>);
+    EXPECT_EQ(cn::consts::tau<T>, cn::consts::pi<T> * cn::Num<T>{T{2}});
+}
+
+namespace {
+    template<typename T>
+    concept HasPi = requires { cn::consts::pi<T>; };
+
+    template<typename T>
+    concept HasTau = requires { cn::consts::tau<T>; };
+}
+
+TEST(Consts, RejectNonFloating) {
+    static_assert(HasPi<double> && HasPi<float>);
+    static_assert(HasTau<double> && HasTau<float>);
+    static_assert(!HasPi<int> && !HasPi<unsigned> && !HasPi<bool>);
+    static_assert(!HasTau<int> && !HasTau<unsigned>);
+    SUCCEED();
+}
