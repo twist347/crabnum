@@ -45,7 +45,16 @@ auto [res, ov] = cn::i32::MAX_VAL().overflowing_add(1_i32);  // {MIN_VAL(), true
 - `wrapping_*` → modular arithmetic, defined behavior for signed
 - `overflowing_*` → `std::pair<Num, bool>` — wrapping result + overflow flag
 
-Operations: `add`, `sub`, `mul`, `div`, `rem`, `neg`, `abs`, `pow`, `shl`, `shr`, `gcd`, `lcm`
+| operation | `checked_` | `saturating_` | `wrapping_` | `overflowing_` |
+|---|:--:|:--:|:--:|:--:|
+| `add` `sub` `mul` `div` `pow` | ✔ | ✔ | ✔ | ✔ |
+| `rem` | ✔ | — | ✔ | ✔ |
+| `shl` `shr` | ✔ | — | ✔ | ✔ |
+| `neg` | S | S | ✔ | ✔ |
+| `abs` | S | S | S | S |
+| `gcd` `lcm` | ✔ | — | — | — |
+
+✔ all integer types · **S** signed only · — not provided. Floats use the plain operators and the math functions below.
 
 > Unary `-` is rejected on unsigned types at compile time (matches Rust). Use `wrapping_neg` / `checked_neg` / `overflowing_neg` for explicit semantics.
 
